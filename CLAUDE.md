@@ -41,7 +41,7 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 - `pulisci()` toglie i punti doppi consecutivi (< 0,5 m) e conserva il tipo del tratto successivo.
 
 ### Editor (`editor/index.html`)
-- Leaflet 1.9.4 da cdnjs, sfondi CARTO Voyager / OpenStreetMap / Esri satellite. Niente build: resta un file unico.
+- Leaflet 1.9.4 da cdnjs. Sfondi: Stradale (Esri World_Street_Map), OpenStreetMap, Satellite e Satellite con vie (Esri). CARTO non si usa: richiede una chiave a pagamento. Niente build: resta un file unico.
 - Protocollo con Streamlit senza libreria: all'avvio invia `streamlit:componentReady`, riceve `streamlit:render` con gli argomenti `data`, `data_version`, `user`, `msg`, `height`, risponde con `streamlit:setComponentValue`.
 - Azioni inviate a Python: `save`, `create`, `archive`. Ognuna ha un `nonce`; Python lo salva nel campo `invio` della versione, così l'editor riconosce i propri salvataggi.
 - Bozze nel `localStorage` del browser: `percorsi-bozza-<id>` (bozza legata alla versione `base`), `percorsi-chiuse-<id>` (segnalazioni chiuse), `percorsi-locali` (gite non ancora sul server).
