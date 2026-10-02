@@ -13,8 +13,9 @@ Lingua: interfaccia, messaggi, commenti e nomi nel codice sono in **italiano**. 
 ## Struttura del repository
 
 ```
-app.py              pagina Streamlit: barra laterale, scheda Editor, scheda Storico versioni
-archivio.py         GPX (lettura, pulizia, scrittura) e archivio versioni su disco o su GitHub
+app.py              pagina Streamlit: accesso, barra laterale (cantiere, mezzo), schede Editor, Storico, Flotta, Utenti; pagina semplice per gli operatori
+archivio.py         GPX (lettura, pulizia, scrittura), archivio versioni su disco o su GitHub, documenti di anagrafica
+anagrafica.py       utenti, ruoli, password cifrate (pbkdf2), cantieri, mezzi, giorni e turni
 editor/index.html   editor della mappa: componente Streamlit bidirezionale, file unico, nessun build
 seed/               gite importate al primo avvio se l'archivio è vuoto
 deploy/             esempi systemd e nginx per il server aziendale
@@ -33,6 +34,17 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
   - `DepositoGitHub`: repository privato dei dati (`percorrenza-dati`), ogni salvataggio è un commit unico via Git Data API; aggiornamento del branch non forzato, quindi una scrittura concorrente viene rifiutata e non sovrascrive.
 - Senza secrets si usa il disco.
 - `salva(..., base=N)` solleva `Conflitto` se la versione attuale non è più `N`.
+
+### Accessi, cantieri e mezzi
+- Ruoli: `amministratore` (tutto), `responsabile` (gite, mezzi e assegnazioni dei propri cantieri), `operatore` (vede e scarica le gite dei propri cantieri).
+- Primo amministratore nei secrets, sezione `[amministratore]` (`utente`, `password`, `nome`): sempre valido, è l'accesso di emergenza.
+- `anagrafica/utenti.json`: utenti con password cifrata, ruolo, cantieri, attivo. Mai password in chiaro.
+- `anagrafica/flotte.json`: `cantieri` {id: nome, rimessa [lat, lon]} e `mezzi` {id: codice, targa, tipo, cantiere, attivo}.
+- Ogni gita ha in `meta.json` i campi `cantiere`, `mezzo`, `numero`, `turno`, `giorni`. Si cambiano con `Archivio.assegna()`, che non crea una nuova versione del percorso ma registra un evento.
+- Un mezzo può avere più gite; una gita ha un solo mezzo.
+- Ogni azione dell'editor verifica i permessi lato server (`puo_modificare`).
+- Le tabelle della scheda Flotta usano `st.data_editor`; la chiave cambia dopo ogni salvataggio (`chiave()`), così ripartono dai dati salvati.
+- La sessione vive in `st.session_state`: ricaricando la pagina si rientra.
 
 ### Punti e tratti
 - Un punto è `[lat, lon, tipo]`, con tipo `"r"` (raccolta) o `"t"` (trasferimento).
@@ -71,8 +83,10 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 
 ## Prossimi passi, in ordine
 
-1. **Stato "pubblicata".** Non ogni versione inviata deve arrivare sul mezzo. Serve un'approvazione esplicita: per ogni gita si ricorda la versione pubblicata, chi l'ha approvata e quando.
-2. **Pagina per i mezzi, pensata per il telefono.** Elenco delle gite pubblicate, pulsante grande per scaricare il GPX e aprirlo in OsmAnd, QR stampabile per ogni gita.
+Fatto: accessi con ruoli, cantieri, mezzi, assegnazione delle gite (mezzo, numero, turno, giorni), pagina semplice per gli operatori.
+
+1. **Stato "pubblicata".** Non ogni versione inviata deve arrivare sul mezzo. Serve un'approvazione esplicita (responsabile o amministratore): per ogni gita si ricorda la versione pubblicata, chi l'ha approvata e quando. La pagina operatori deve poi mostrare solo la versione pubblicata.
+2. **Pagina per i mezzi, pensata per il telefono.** Partire dalla scheda operatore esistente: gite del giorno per mezzo e turno, pulsante grande per aprire in OsmAnd, QR stampabile per ogni mezzo.
 3. **Pilota con OsmAnd** su due o tre gite: verificare se la navigazione lungo la traccia regge i ripassi.
 4. **Guida propria (web app installabile)**, se il pilota mostra che serve: mappa offline, schermo sempre acceso, logica "Segui".
 5. **App nativa e registrazione delle tracce** per la fase di verifica.
@@ -84,7 +98,7 @@ Più avanti: aggancio automatico alle strade (Valhalla, profilo camion), punti d
 ## Domande ancora aperte
 
 - Telefoni degli operatori: personali, aziendali o tablet sul mezzo? Android o iPhone?
-- Nei nomi delle gite, "35" è il numero del mezzo o il codice della zona?
+- Nei nomi delle gite, "35" è il numero del mezzo (probabile: ogni mezzo ha le sue gite numerate).
 - Regola di nomenclatura delle gite (proposta: zona, mezzo, turno, numero gita).
 - La gita 1 camion è una versione superata o un servizio diverso sulle stesse strade?
 

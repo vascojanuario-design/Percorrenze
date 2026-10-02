@@ -2,9 +2,34 @@
 
 Portale interno per correggere le gite di raccolta in modo condiviso. Ogni correzione viene salvata sul server come nuova versione, con autore, data e nota. Nessuna versione viene mai sovrascritta.
 
+## Accessi e ruoli
+
+Si entra con nome utente e password. Le password sono salvate solo in forma cifrata, nel repository dei dati.
+
+| Ruolo | Cosa può fare |
+| --- | --- |
+| Amministratore | Tutto: utenti, cantieri, mezzi e gite di ogni cantiere |
+| Responsabile di cantiere | Corregge le gite e gestisce mezzi e assegnazioni dei suoi cantieri |
+| Operatore | Vede le gite dei suoi cantieri e scarica il GPX da aprire in OsmAnd |
+
+Il **primo amministratore** si definisce nei Secrets dell'app, e resta sempre valido come accesso di emergenza:
+
+```toml
+[amministratore]
+utente = "admin"
+password = "una-password-lunga-e-solo-tua"
+nome = "Amministratore"
+```
+
+Gli altri utenti si creano dalla scheda **Utenti**. Ognuno può cambiare la propria password dalla barra laterale. Ricaricando la pagina del browser bisogna rientrare.
+
+## Cantieri, mezzi e gite
+
+Ogni gita appartiene a un cantiere e a un mezzo; un mezzo può avere più gite (gita 1, 2, 3…), ognuna con turno e giorni. Si gestisce tutto dalla scheda **Flotta**, scegliendo il cantiere nella barra laterale. Le gite importate senza cantiere compaiono all'amministratore sotto "Senza cantiere", da dove si assegnano.
+
 ## Come funziona per chi lo usa
 
-1. Si scrive il proprio nome nella barra laterale (non serve se l'accesso passa dal proxy con login, vedi sotto).
+1. Si entra con il proprio utente e si sceglie il cantiere nella barra laterale.
 2. Nella scheda **Editor** si sceglie una gita e la si corregge. Le modifiche restano una bozza su quel computer, anche chiudendo il browser.
 3. Si scrive cosa si è corretto e si preme **Invia**. Da quel momento la nuova versione è visibile a tutti.
 4. Nella scheda **Storico versioni** si vedono tutte le versioni, si scarica il GPX di ognuna e si può rimettere attuale una versione precedente.
@@ -18,6 +43,7 @@ Le nuove gite si caricano dalla barra laterale (**Aggiungi gite**). Al primo avv
 ```
 app.py              pagina Streamlit
 archivio.py         lettura e scrittura di gite e versioni (disco o GitHub)
+anagrafica.py       utenti, ruoli, password cifrate, cantieri e mezzi
 editor/index.html   editor della mappa (componente Streamlit)
 seed/               gite importate al primo avvio, se l'archivio è vuoto
 .streamlit/         configurazione di Streamlit
@@ -31,6 +57,8 @@ Le gite possono stare in due posti, con la stessa identica struttura:
 ```
 gite/<id-gita>/meta.json   nome, storico versioni, autori
 gite/<id-gita>/v001.gpx    una versione per file, in GPX standard
+anagrafica/utenti.json     utenti e password cifrate
+anagrafica/flotte.json     cantieri e mezzi
 ```
 
 - **Repository GitHub privato**, per usare il portale online (Streamlit Community Cloud) durante lo sviluppo. Ogni correzione inviata diventa un commit con autore e nota.
@@ -54,6 +82,11 @@ Su Community Cloud il disco si azzera a ogni riavvio, quindi le gite vanno salva
    repo = "tuo-utente/percorrenza-dati"
    branch = "main"
    token = "github_pat_..."
+
+   [amministratore]
+   utente = "admin"
+   password = "una-password-lunga-e-solo-tua"
+   nome = "Amministratore"
    ```
 
 4. Salva: l'app si riavvia, importa le gite della cartella `seed/` nel repository dei dati e nella barra laterale mostra "Archivio: GitHub …".
@@ -122,7 +155,7 @@ I dati restano nella cartella `./dati` accanto al progetto.
 
 ## Cose da sapere
 
-- **Mappe di sfondo.** Sono caricate da servizi esterni (CARTO, OpenStreetMap, Esri satellite). Vanno bene per una fase pilota con pochi utenti. Per l'uso a regime conviene un fornitore con contratto o un server di mappe interno.
+- **Mappe di sfondo.** Sono caricate da servizi esterni (Esri e OpenStreetMap). Vanno bene per una fase pilota con pochi utenti. Per l'uso a regime conviene un fornitore con contratto o un server di mappe interno.
 - **Bozze.** Restano nel browser di chi le fa. Se si cambia computer, le bozze non inviate non lo seguono.
 - **Più utenti insieme.** Su disco l'archivio usa un lock su file; su GitHub ogni salvataggio controlla che nessuno abbia scritto nel frattempo. In entrambi i casi una versione non può sovrascriverne un'altra. Non avviare più server sulla stessa cartella condivisa via rete.
 - **Prossimi passi previsti.** Aggancio automatico alle strade con un motore di routing (Valhalla), punti di raccolta, collegamento con il modulo di gestione e database PostGIS.

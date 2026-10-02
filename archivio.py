@@ -352,7 +352,8 @@ class Archivio:
                       f"{m['nome']}: versione {n} - {nota}", autore)
         return v
 
-    def crea(self, nome: str, punti: list[Punto], autore: str, nota: str, nonce: str | None = None) -> str:
+    def crea(self, nome: str, punti: list[Punto], autore: str, nota: str, nonce: str | None = None,
+             cantiere: str | None = None, mezzo: str | None = None) -> str:
         punti, _ = pulisci(punti)
         if len(punti) < 2:
             raise ValueError("Una gita deve avere almeno due punti")
@@ -360,7 +361,7 @@ class Archivio:
             self.d.aggiorna(forza=True)
             gid = f"{_slug(nome)}-{uuid.uuid4().hex[:6]}"
             m = {"id": gid, "nome": nome.strip() or "Gita senza nome", "creata": _adesso(), "creata_da": autore,
-                 "archiviata": False, "versioni": []}
+                 "archiviata": False, "cantiere": cantiere, "mezzo": mezzo, "versioni": []}
             self._nuova_versione(m, punti, autore, nota, nonce)
         return gid
 
@@ -397,12 +398,44 @@ class Archivio:
             self.d.scrivi({f"{self._cartella(gid)}/meta.json": json.dumps(m, ensure_ascii=False, indent=2)},
                           f"{m['nome']}: {azione}", autore)
 
+    def assegna(self, gid: str, autore: str, **campi) -> bool:
+        """Aggiorna cantiere, mezzo, turno, giorni o numero della gita. Non crea una nuova versione del percorso."""
+        consentiti = {"cantiere", "mezzo", "turno", "giorni", "numero"}
+        with self.d.lock:
+            self.d.aggiorna(forza=True)
+            m = self.meta(gid)
+            cambi = {k: v for k, v in campi.items() if k in consentiti and m.get(k) != v}
+            if not cambi:
+                return False
+            m.update(cambi)
+            m.setdefault("eventi", []).append({"data": _adesso(), "autore": autore, "azione": "assegnazione aggiornata",
+                                              "dettagli": cambi})
+            self.d.scrivi({f"{self._cartella(gid)}/meta.json": json.dumps(m, ensure_ascii=False, indent=2)},
+                          f"{m['nome']}: assegnazione aggiornata", autore)
+            return True
+
+    # --- anagrafica condivisa (utenti, cantieri, mezzi)
+
+    def leggi_doc(self, nome: str, predefinito: dict) -> dict:
+        dati = self.d.leggi(f"anagrafica/{nome}.json")
+        return json.loads(dati) if dati else json.loads(json.dumps(predefinito))
+
+    def modifica_doc(self, nome: str, predefinito: dict, funzione, messaggio: str, autore: str):
+        """Legge il documento aggiornato, applica la modifica e lo salva, tutto sotto lock.
+        Se la funzione solleva un'eccezione non viene scritto nulla."""
+        with self.d.lock:
+            self.d.aggiorna(forza=True)
+            doc = self.leggi_doc(nome, predefinito)
+            risultato = funzione(doc)
+            self.d.scrivi({f"anagrafica/{nome}.json": json.dumps(doc, ensure_ascii=False, indent=2)}, messaggio, autore)
+            return risultato
+
     # --- esportazione e prima importazione
 
-    def zip_ultime(self) -> bytes:
+    def zip_ultime(self, gite: list[dict] | None = None) -> bytes:
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-            for m in self.elenco():
+            for m in (self.elenco() if gite is None else gite):
                 v = m["versioni"][-1]
                 z.writestr(f"{_slug(m['nome'])}_v{v['n']}.gpx", self.gpx(m["id"], v["n"]))
         return buf.getvalue()
