@@ -10,7 +10,7 @@ from pathlib import Path
 import streamlit as st
 import streamlit.components.v1 as components
 
-from archivio import Archivio, Conflitto, leggi_gpx, pulisci
+from archivio import Conflitto, ErroreArchivio, apri, leggi_gpx, pulisci
 
 BASE = Path(__file__).parent
 DATA_DIR = Path(os.environ.get("PERCORSI_DATA_DIR", BASE / "dati"))
@@ -27,14 +27,27 @@ st.markdown(
 editor = components.declare_component("editor_percorsi", path=str(BASE / "editor"))
 
 
-@st.cache_resource
-def apri_archivio() -> Archivio:
-    a = Archivio(DATA_DIR)
+def configurazione() -> dict:
+    """Sezione [archivio] dei secrets. Senza secrets: cartella su disco (PERCORSI_DATA_DIR)."""
+    try:
+        return dict(st.secrets["archivio"])
+    except Exception:
+        return {}
+
+
+@st.cache_resource(show_spinner="Apertura archivio…")
+def apri_archivio():
+    a = apri(configurazione(), DATA_DIR)
     a.semina(BASE / "seed")
     return a
 
 
-archivio = apri_archivio()
+try:
+    archivio = apri_archivio()
+except ErroreArchivio as e:
+    st.error(f"Archivio non disponibile. {e}")
+    st.caption("Controlla la sezione [archivio] nei secrets dell'app (vedi README).")
+    st.stop()
 
 
 @st.cache_data(show_spinner=False)
@@ -90,7 +103,7 @@ with st.sidebar:
                     archivio.crea(nome, pts, utente,
                                   f"Importata da {f.name}" + (f", rimossi {rimossi} punti doppi" if rimossi else ""))
                     avviso(f"Importata: {nome}")
-                except ValueError as e:
+                except (ValueError, ErroreArchivio) as e:
                     avviso(str(e), ok=False)
             st.session_state.upload_n = st.session_state.get("upload_n", 0) + 1
             st.rerun()
@@ -99,7 +112,7 @@ with st.sidebar:
     st.download_button("Scarica tutte le gite (ZIP)", data=archivio.zip_ultime(),
                        file_name=f"gite_{datetime.now():%Y%m%d}.zip", mime="application/zip",
                        width="stretch")
-    st.caption(f"Archivio: `{DATA_DIR.resolve()}`")
+    st.caption(f"Archivio: {archivio.descrizione}")
 
 for testo, ok in st.session_state.pop("avvisi", []):
     st.toast(testo, icon="✅" if ok else "⚠️")
@@ -136,7 +149,7 @@ with scheda_editor:
             avviso(f"Non salvata: nel frattempo un collega ha inviato la versione {c.versione_attuale}. "
                    "La tua bozza è conservata come copia \"(tua bozza)\": confrontala con la nuova versione "
                    "e riporta lì le correzioni.", ok=False, nonce=nonce, gita_id=gid)
-        except (ValueError, KeyError, FileNotFoundError) as e:
+        except (ValueError, KeyError, FileNotFoundError, ErroreArchivio) as e:
             avviso(f"Non salvata: {e}", ok=False, nonce=nonce)
         st.rerun()
 
@@ -167,14 +180,20 @@ with scheda_storico:
                                mime="application/gpx+xml", width="stretch")
         if mostra_archiviate:
             if col_rip.button("Riattiva la gita", width="stretch"):
-                archivio.archivia(m["id"], utente or "sconosciuto", archiviata=False)
-                avviso(f"Riattivata: {m['nome']}")
+                try:
+                    archivio.archivia(m["id"], utente or "sconosciuto", archiviata=False)
+                    avviso(f"Riattivata: {m['nome']}")
+                except ErroreArchivio as e:
+                    avviso(str(e), ok=False)
                 st.rerun()
         elif col_rip.button("Ripristina questa versione", width="stretch",
                             disabled=n == ultima["n"] or not utente,
                             help=None if utente else "Scrivi il tuo nome nella barra laterale"):
-            nuova = archivio.ripristina(m["id"], n, utente)
-            avviso(f"La versione {n} è tornata attuale come versione {nuova}")
+            try:
+                nuova = archivio.ripristina(m["id"], n, utente)
+                avviso(f"La versione {n} è tornata attuale come versione {nuova}")
+            except ErroreArchivio as e:
+                avviso(str(e), ok=False)
             st.rerun()
 
         for e in reversed(m.get("eventi", [])):

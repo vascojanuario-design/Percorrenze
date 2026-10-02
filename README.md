@@ -17,21 +17,60 @@ Le nuove gite si caricano dalla barra laterale (**Aggiungi gite**). Al primo avv
 
 ```
 app.py              pagina Streamlit
-archivio.py         lettura e scrittura di gite e versioni su disco
+archivio.py         lettura e scrittura di gite e versioni (disco o GitHub)
 editor/index.html   editor della mappa (componente Streamlit)
 seed/               gite importate al primo avvio, se l'archivio è vuoto
 .streamlit/         configurazione di Streamlit
 deploy/             esempi per systemd e nginx
 ```
 
-I dati stanno nella cartella indicata da `PERCORSI_DATA_DIR` (predefinita: `./dati`):
+## Dove finiscono i dati
+
+Le gite possono stare in due posti, con la stessa identica struttura:
 
 ```
-dati/gite/<id-gita>/meta.json   nome, storico versioni, autori
-dati/gite/<id-gita>/v001.gpx    una versione per file, in GPX standard
+gite/<id-gita>/meta.json   nome, storico versioni, autori
+gite/<id-gita>/v001.gpx    una versione per file, in GPX standard
 ```
 
-Per il backup basta copiare la cartella `dati`. I GPX si aprono con qualsiasi programma.
+- **Repository GitHub privato**, per usare il portale online (Streamlit Community Cloud) durante lo sviluppo. Ogni correzione inviata diventa un commit con autore e nota.
+- **Cartella sul server**, per l'uso definitivo in azienda. È la scelta predefinita quando non c'è nessuna configurazione: la cartella è quella indicata da `PERCORSI_DATA_DIR` (predefinita `./dati`).
+
+## Uso online con Streamlit Community Cloud
+
+Su Community Cloud il disco si azzera a ogni riavvio, quindi le gite vanno salvate in un repository GitHub separato da quello del codice.
+
+1. **Crea il repository dei dati.** Su GitHub: New repository, nome per esempio `percorrenza-dati`, visibilità **Private**, spunta "Add a README file" (il repository non deve essere vuoto).
+2. **Crea un token di accesso limitato a quel repository.** Su GitHub: foto profilo, Settings, Developer settings, Personal access tokens, **Fine-grained tokens**, Generate new token.
+   - Repository access: *Only select repositories*, scegli `percorrenza-dati`.
+   - Permissions, Repository permissions: **Contents: Read and write**.
+   - Scegli una scadenza (per esempio un anno) e annotala: alla scadenza l'app smette di salvare finché non metti un token nuovo.
+   - Copia il token: GitHub lo mostra una sola volta.
+3. **Inserisci la configurazione nell'app.** Su share.streamlit.io apri l'app, Settings, **Secrets**, e incolla:
+
+   ```toml
+   [archivio]
+   tipo = "github"
+   repo = "tuo-utente/percorrenza-dati"
+   branch = "main"
+   token = "github_pat_..."
+   ```
+
+4. Salva: l'app si riavvia, importa le gite della cartella `seed/` nel repository dei dati e nella barra laterale mostra "Archivio: GitHub …".
+
+Il token non va mai scritto nei file del repository del codice: sta solo nei Secrets. Conviene rendere privato anche il repository del codice, perché la cartella `seed/` contiene i percorsi.
+
+## Passaggio al server aziendale
+
+Sul server basta copiare il repository dei dati nella cartella dati e non configurare nessun secret:
+
+```bash
+git clone https://github.com/tuo-utente/percorrenza-dati.git /srv/percorsi/dati
+```
+
+Da quel momento l'app salva su disco, con tutto lo storico delle versioni fatte online. In alternativa il server può continuare a usare GitHub: in quel caso la stessa configurazione dei Secrets va in `.streamlit/secrets.toml` sul server.
+
+Per il backup della cartella basta copiarla. I GPX si aprono con qualsiasi programma.
 
 ## Prova sul proprio computer
 
@@ -85,5 +124,5 @@ I dati restano nella cartella `./dati` accanto al progetto.
 
 - **Mappe di sfondo.** Sono caricate da servizi esterni (CARTO, OpenStreetMap, Esri satellite). Vanno bene per una fase pilota con pochi utenti. Per l'uso a regime conviene un fornitore con contratto o un server di mappe interno.
 - **Bozze.** Restano nel browser di chi le fa. Se si cambia computer, le bozze non inviate non lo seguono.
-- **Un solo processo.** L'archivio usa un lock su file, quindi funziona correttamente con più utenti sullo stesso server. Non va avviato su più server che condividono la stessa cartella via rete.
+- **Più utenti insieme.** Su disco l'archivio usa un lock su file; su GitHub ogni salvataggio controlla che nessuno abbia scritto nel frattempo. In entrambi i casi una versione non può sovrascriverne un'altra. Non avviare più server sulla stessa cartella condivisa via rete.
 - **Prossimi passi previsti.** Aggancio automatico alle strade con un motore di routing (Valhalla), punti di raccolta, collegamento con il modulo di gestione e database PostGIS.
