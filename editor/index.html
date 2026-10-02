@@ -246,15 +246,37 @@ function fromServer(){
 }
 
 /* ---------- mappa ---------- */
-const map=L.map('map',{zoomControl:false}).setView([43.81,11.145],14);
-L.control.zoom({position:'topright'}).addTo(map);
+const map=L.map('map',{zoomControl:false,maxZoom:20}).setView([43.81,11.145],14);
+/* Le mappe vengono caricate dentro l'iframe di Streamlit: alcuni fornitori (OpenStreetMap, CARTO)
+   rifiutano le richieste senza l'indirizzo di provenienza, quindi lo inviamo esplicitamente.
+   Se la mappa scelta non si carica, si passa da sola a quella Esri, che funziona sempre. */
+const RP='strict-origin-when-cross-origin';
+const ESRI='https://server.arcgisonline.com/ArcGIS/rest/services/';
+const esri=(svc,o={})=>L.tileLayer(ESRI+svc+'/MapServer/tile/{z}/{y}/{x}',Object.assign({maxZoom:20,maxNativeZoom:19,referrerPolicy:RP,attribution:'&copy; Esri'},o));
 const base={
-  'Stradale':L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd',attribution:'&copy; OpenStreetMap &copy; CARTO'}),
-  'OpenStreetMap':L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}),
-  'Satellite':L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'&copy; Esri'})
+  'Stradale':L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd',referrerPolicy:RP,attribution:'&copy; OpenStreetMap &copy; CARTO'}),
+  'OpenStreetMap':L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,maxNativeZoom:19,referrerPolicy:RP,attribution:'&copy; OpenStreetMap'}),
+  'Stradale Esri':esri('World_Street_Map'),
+  'Satellite':esri('World_Imagery'),
+  'Satellite con vie':L.layerGroup([esri('World_Imagery'),esri('Reference/World_Transportation'),esri('Reference/World_Boundaries_and_Places')])
 };
-base['Stradale'].addTo(map);
+const RISERVA='Stradale Esri';
+let sfondo='Satellite con vie';
+try{const s=localStorage.getItem('percorsi-sfondo');if(s&&base[s])sfondo=s;}catch(e){}
+function sorveglia(nome){
+  const lay=base[nome],strati=lay.getLayers?lay.getLayers():[lay];let ok=0,ko=0;
+  const prova=strati[0];
+  const onOk=()=>{ok++;};
+  const onKo=()=>{ko++;if(ko>=4&&ok===0&&nome!==RISERVA&&map.hasLayer(lay)){
+    prova.off('tileload',onOk);prova.off('tileerror',onKo);
+    map.removeLayer(lay);base[RISERVA].addTo(map);
+    toast('La mappa "'+nome+'" non risponde: uso "'+RISERVA+'". Puoi cambiarla dal pulsante in alto a destra.');}};
+  prova.on('tileload',onOk);prova.on('tileerror',onKo);
+}
+Object.keys(base).forEach(sorveglia);
+base[sfondo].addTo(map);
 L.control.layers(base,null,{position:'topright'}).addTo(map);
+map.on('baselayerchange',e=>{try{localStorage.setItem('percorsi-sfondo',e.name);}catch(_){}});
 L.control.scale({imperial:false,position:'bottomright'}).addTo(map);
 [['casing',405],['cmp',408],['sel',412],['lines',420],['seq',430]].forEach(([n,z])=>{map.createPane(n).style.zIndex=z;});
 
