@@ -1,0 +1,13 @@
+[Unit]
+Description=Portale percorsi (Streamlit)
+After=network.target
+
+[Service]
+User=percorsi
+WorkingDirectory=/opt/percorsi
+Environment=PERCORSI_DATA_DIR=/srv/percorsi/dati
+ExecStart=/opt/percorsi/.venv/bin/streamlit run app.py --server.address=127.0.0.1 --server.port=8501
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor percorsi</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1C2A2E;--ink2:#56656A;--line:#D3DAD8;--bg:#F1F4F3;--card:#FFFFFF;--sig:#F2C230;--warn:#D9480F;--spike:#B8235A;--danger:#B42318;--transfer:#46535A;
+--f:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;--fc:'Barlow Semi Condensed','Arial Narrow',system-ui,sans-serif}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{font:15px/1.45 var(--f);color:var(--ink);background:var(--bg);display:grid;grid-template-columns:372px 1fr;overflow:hidden}
+aside{background:var(--card);border-right:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column}
+main{position:relative;min-width:0}
+#map{position:absolute;inset:0;background:#e5e9e8}
+header{padding:18px 20px 14px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:10px}
+h1{font:600 26px/1 var(--fc);margin:0;letter-spacing:-.01em}
+header p{margin:0;color:var(--ink2);font-size:14px}
+section{padding:14px 20px 18px;border-bottom:1px solid var(--line)}
+h2,h3{font:600 17px/1.2 var(--fc);margin:0 0 10px}
+h3{font-size:15px;margin:18px 0 8px;display:flex;align-items:center;gap:8px}
+.rowhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.rowhead h2{margin:0}
+button,.btn{font:500 14px var(--f);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+button:hover:not(:disabled),.btn:hover{background:#EAF0EE;border-color:#B9C4C1}
+button:disabled{opacity:.42;cursor:default}
+button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+button.primary:hover:not(:disabled){background:#2D4247}
+button.danger{color:var(--danger)}
+button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-decoration:underline;text-underline-offset:2px}
+:focus-visible{outline:2px solid #2B7FD8;outline-offset:2px}
+.btn input{display:none}
+#list{list-style:none;margin:0;padding:0}
+.gi{display:grid;grid-template-columns:28px 10px 1fr auto auto;align-items:center;gap:8px;padding:6px 6px 6px 2px;border-radius:6px;cursor:pointer}
+.gi:hover{background:#F0F4F3}
+.gi.on{background:#E3ECE9}
+.gi .eye{border:none;background:none;padding:4px;color:var(--ink2)}
+.gi .sw{width:10px;height:22px;border-radius:2px}
+.gi .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gi .km{font:500 13px var(--fc);color:var(--ink2)}
+.gi .bd{font:600 12px var(--fc);background:#FBE3D6;color:#8A2E07;border-radius:10px;padding:1px 7px}
+.gi .dt{width:8px;height:8px;border-radius:50%;background:var(--sig);box-shadow:0 0 0 1px #8a6d00}
+.gi .ok{color:#3C7A55;font:500 12px var(--fc)}
+.foot{margin-top:8px;display:flex;justify-content:flex-end}
+#act[hidden]{display:none}
+#name{width:100%;font:600 19px var(--fc);border:1px solid transparent;border-radius:6px;padding:4px 6px;margin:-4px -6px 6px;color:var(--ink);background:transparent;width:calc(100% + 12px)}
+#name:hover{border-color:var(--line)}
+#name:focus{border-color:#2B7FD8;outline:none;background:#fff}
+#stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 6px}
+.st{background:var(--bg);border-radius:6px;padding:6px 8px}
+.st b{display:block;font:600 18px/1.1 var(--fc)}
+.st span{font-size:12px;color:var(--ink2)}
+#state{font-size:13px;color:var(--ink2);margin:6px 0 0;display:flex;align-items:center;gap:6px}
+#state.dirty::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--sig);box-shadow:0 0 0 1px #8a6d00}
+.tools{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
+#selbox{margin-top:14px;border:1px solid var(--line);border-radius:8px;padding:10px}
+#selinfo{margin:0 0 8px;font-size:14px}
+#selinfo.empty{color:var(--ink2)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.grid2 button{justify-content:center}
+.anopts{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--ink2);margin-bottom:6px}
+.anopts input[type=number]{width:62px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:4px}
+.anopts label{display:flex;align-items:center;gap:5px}
+#anlist,#vlist{list-style:none;margin:0;padding:0;max-height:260px;overflow-y:auto}
+#anlist li{display:grid;grid-template-columns:12px 1fr auto;gap:8px;align-items:center;padding:5px 4px;border-radius:5px;cursor:pointer;font-size:14px}
+#anlist li:hover{background:#F0F4F3}
+#anlist .d{width:10px;height:10px;border-radius:50%}
+#anlist small{color:var(--ink2);display:block;font-size:12px}
+.none{color:var(--ink2);font-size:14px;padding:4px 0}
+.count{font:600 12px var(--fc);background:#FBE3D6;color:#8A2E07;border-radius:10px;padding:1px 7px}
+.count.zero{background:#DDEFE3;color:#22553A}
+.saverow{display:flex;gap:6px;margin-bottom:8px}
+.saverow input{flex:1;min-width:0;font:inherit;font-size:14px;border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+#vlist li{border-left:3px solid var(--line);padding:4px 0 6px 10px;margin-bottom:4px;font-size:14px}
+#vlist li.cmp{border-left-color:#7A5CC2}
+#vlist .vh{display:flex;align-items:baseline;gap:8px}
+#vlist .vh b{font:600 15px var(--fc)}
+#vlist .vh span{font-size:12px;color:var(--ink2)}
+#vlist p{margin:1px 0 3px}
+.va{display:flex;gap:2px;flex-wrap:wrap}
+#cmp.on{color:#5B3FA8;font-weight:600}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px}
+.help{font-size:13px;color:var(--ink2);margin:0}
+.help kbd{font:500 12px var(--f);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:#fff}
+#hint{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:800;background:var(--ink);color:#fff;font-size:14px;padding:6px 14px;border-radius:20px;pointer-events:none}
+#hint[hidden],#seqbar[hidden]{display:none}
+#toast{position:absolute;bottom:96px;left:50%;transform:translateX(-50%);z-index:900;background:var(--ink);color:#fff;padding:8px 16px;border-radius:6px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
+#toast.on{opacity:1}
+#seqbar{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);z-index:800;width:min(600px,calc(100% - 32px));background:var(--card);border-radius:10px;box-shadow:0 2px 10px rgba(28,42,46,.18);padding:10px 14px;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center}
+#seqbar input{width:100%;accent-color:var(--warn)}
+#seqlbl{font:600 15px var(--fc);min-width:118px;text-align:right}
+#seqbar .t{grid-column:1/-1;font-size:12px;color:var(--ink2);margin:-4px 0 0}
+#drop{position:absolute;inset:0;z-index:950;background:rgba(28,42,46,.55);color:#fff;display:none;align-items:center;justify-content:center;font:600 22px var(--fc)}
+#drop.on{display:flex}
+.vx{background:#fff;border:2px solid var(--ink);border-radius:50%;cursor:grab}
+.vx.on{background:var(--sig);border-width:2.5px}
+.mid{background:rgba(255,255,255,.75);border:1.5px dashed var(--ink);border-radius:50%;cursor:copy}
+.se{display:flex;align-items:center;justify-content:center;font:600 11px var(--fc);color:#fff;background:var(--ink);border:2px solid #fff}
+.se.s{border-radius:50%}.se.e{border-radius:3px}
+.an{display:flex;align-items:center;justify-content:center;border-radius:50%;border:2px solid #fff;color:#fff;font:600 11px var(--fc);cursor:pointer}
+.an.gap{background:var(--warn)}.an.spike{background:var(--spike)}.an.inv{background:#6C7A80}
+.pos{background:var(--warn);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 1px var(--warn)}
+.leaflet-container{font-family:var(--f)}
+@media (max-width:820px){body{grid-template-columns:1fr;grid-template-rows:55vh 1fr;overflow:auto}main{grid-row:1}aside{grid-row:2;border-right:none}}
+</style>
+</head>
+<body>
+<aside>
+  <section>
+    <div class="rowhead"><h2>Gite</h2><span class="help" id="who"></span></div>
+    <ul id="list"></ul>
+  </section>
+  <section id="empty"><p class="help">Seleziona una gita dall'elenco o cliccala sulla mappa per correggerla. Le modifiche restano una bozza su questo computer finché non le invii al server.</p></section>
+  <section id="act" hidden>
+    <input id="name" aria-label="Nome della gita" placeholder="Zona, mezzo, turno, numero gita">
+    <div id="stats"></div>
+    <p id="state"></p>
+    <div class="tools">
+      <button id="undo" title="Ctrl+Z">Annulla</button>
+      <button id="redo" title="Ctrl+Y">Ripeti</button>
+      <button id="fit">Inquadra gita</button>
+    </div>
+
+    <div id="selbox">
+      <p id="selinfo"></p>
+      <div class="grid2">
+        <button data-a="del" class="danger">Elimina punti</button>
+        <button data-a="split">Dividi qui</button>
+        <button data-a="tr">Segna trasferimento</button>
+        <button data-a="rc">Segna raccolta</button>
+        <button data-a="ts">Taglia inizio fin qui</button>
+        <button data-a="te">Taglia fine da qui</button>
+      </div>
+    </div>
+    <p class="help" style="margin-top:8px">Clic su un punto per selezionarlo, <kbd>Maiusc</kbd>+clic per estendere a un tratto. Trascina un punto per spostarlo, clicca un cerchio tratteggiato per aggiungerne uno. <kbd>Canc</kbd> elimina, <kbd>Esc</kbd> deseleziona.</p>
+
+    <h3>Da verificare <span class="count" id="ancount"></span></h3>
+    <div class="anopts">
+      <label>Segmenti oltre <input type="number" id="gapth" value="250" min="50" step="25"> m</label>
+      <label><input type="checkbox" id="showinv"> Mostra inversioni a U</label>
+    </div>
+    <ul id="anlist"></ul>
+    <button class="link" id="unign" hidden></button>
+
+    <h3>Invia al server</h3>
+    <p class="help" id="srvinfo"></p>
+    <div class="saverow"><input id="vnote" placeholder="Cosa hai corretto?" aria-label="Nota della versione"><button class="primary" id="send">Invia</button></div>
+    <div class="va"><button class="link" id="cmp">Confronta con la versione sul server</button><button class="link" id="discard">Scarta la bozza</button></div>
+
+    <div class="actions">
+      <button id="rev">Inverti senso</button>
+      <button id="delg" class="danger">Archivia gita</button>
+    </div>
+  </section>
+</aside>
+<main>
+  <div id="map"></div>
+  <div id="hint" hidden></div>
+  <div id="seqbar" hidden>
+    <button id="play" aria-label="Riproduci">Segui</button>
+    <input type="range" id="seq" min="0" max="1000" value="0" aria-label="Posizione lungo il percorso">
+    <span id="seqlbl"></span>
+    <p class="t">In arancione i prossimi 300 m, come li vedrebbe l'operatore. Utile per controllare l'ordine dei tratti ripassati.</p>
+  </div>
+  <div id="toast" role="status"></div>
+  <div id="drop">Rilascia i file GPX per caricarli</div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+let DATA = [], DATA_VERSION = null, USER = '', HEIGHT = 820, lastMsg = null, booted = false;
+const justSent = new Map(), DK = 'percorsi-bozza-', IK = 'percorsi-chiuse-';
+const PAL = ['#2F6B4F','#1F5FA8','#B4432F','#7A4FA0','#B07D10','#0F7C86','#8A5A3C','#C2417A','#4E6B1F','#3E4FA8'];
+const RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = s => document.querySelector(s);
+let gite = [], act = null, sel = null, cmpOn = false, seqOn = false, seqPos = 0, timer = null;
+
+/* ---------- geometria ---------- */
+function hv(a,b){const r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lon-a.lon)*r;const x=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dn/2)**2;return 2*6371000*Math.asin(Math.sqrt(x));}
+function cum(P){const c=[0];for(let i=1;i<P.length;i++)c.push(c[i-1]+hv(P[i-1],P[i]));return c;}
+const fmtKm = m => (m/1000).toLocaleString('it-IT',{minimumFractionDigits:1,maximumFractionDigits:1})+' km';
+const fmtM = m => m<1000 ? Math.round(m)+' m' : fmtKm(m);
+const clone = P => P.map(p=>({lat:p.lat,lon:p.lon,t:p.t}));
+const key = p => p.lat.toFixed(5)+','+p.lon.toFixed(5);
+
+/* il tipo di un segmento (i -> i+1) è quello del punto i */
+function runs(P){const R=[];let s=0;for(let i=1;i<P.length-1;i++){if(P[i].t!==P[s].t){R.push({t:P[s].t,a:s,b:i});s=i;}}R.push({t:P[s].t,a:s,b:P.length-1});return R;}
+function lengths(P){let r=0,t=0;for(let i=0;i<P.length-1;i++){const d=hv(P[i],P[i+1]);if(P[i].t==='t')t+=d;else r+=d;}return {r,t,tot:r+t};}
+
+function clean(P){const out=[];let rem=0;for(const p of P){const last=out[out.length-1];if(last&&hv(last,p)<0.5){last.t=p.t;rem++;continue;}out.push({...p});}return {pts:out,rem};}
+
+function newGita(name,file,raw,note){
+  const c=clean(raw);
+  const g={id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),name,file,color:PAL[gite.length%PAL.length],pts:c.pts,undo:[],redo:[],versions:[],dismissed:{},visible:true,dirty:false};
+  g.versions.push({n:1,date:new Date().toISOString(),note:note||('Importata da '+file+(c.rem?', rimossi '+c.rem+' punti doppi':'')),pts:clone(g.pts)});
+  return g;
+}
+function parseGPX(text,file){
+  const doc=new DOMParser().parseFromString(text,'application/xml');
+  if(doc.getElementsByTagName('parsererror').length) throw new Error(file+' non è un GPX leggibile');
+  const pts=[];const segs=[...doc.getElementsByTagName('trkseg')];
+  if(segs.length){for(const s of segs){const tipo=[...s.getElementsByTagName('*')].find(e=>e.localName==='tipo');const t=tipo&&tipo.textContent.trim()==='trasferimento'?'t':'r';for(const p of s.getElementsByTagName('trkpt'))pts.push({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon'),t});}}
+  else for(const p of doc.getElementsByTagName('rtept'))pts.push({lat:+p.getAttribute('lat'),lon:+p.getAttribute('lon'),t:'r'});
+  if(pts.length<2) throw new Error(file+' non contiene una traccia');
+  const md=doc.querySelector('metadata > name')||doc.querySelector('trk > name');
+  return newGita(md&&md.textContent.trim()?md.textContent.trim():file.replace(/\.gpx$/i,''),file,pts);
+}
+
+/* ---------- bozze locali e dati dal server ---------- */
+const LK='percorsi-locali';
+function mkLocal(name,pts,dismissed){return {id:'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),sid:null,base:null,name,file:'',color:PAL[0],pts,server:null,serverName:name,undo:[],redo:[],versions:[],dismissed:dismissed||{},visible:true,dirty:true};}
+function save(){
+  try{localStorage.setItem(LK,JSON.stringify(gite.filter(g=>!g.sid).map(g=>({id:g.id,name:g.name,pts:g.pts,dismissed:g.dismissed}))));}catch(e){}
+  try{for(const g of gite){if(!g.sid)continue;
+    if(g.dirty)localStorage.setItem(DK+g.sid,JSON.stringify({base:g.base,name:g.name,pts:g.pts}));else localStorage.removeItem(DK+g.sid);
+    localStorage.setItem(IK+g.sid,JSON.stringify(g.dismissed));}}catch(e){}
+}
+function fromServer(){
+  const keep=act&&act.sid,lost=[];
+  let local=gite.filter(g=>!g.sid);
+  if(!booted){try{local=(JSON.parse(localStorage.getItem(LK)||'[]')).map(x=>Object.assign(mkLocal(x.name,x.pts,x.dismissed),{id:x.id}));}catch(e){local=[];}}
+  Object.values(groups).forEach(l=>l.remove());for(const k in groups)delete groups[k];
+  gite=[];act=null;sel=null;cmpOn=false;
+  DATA.forEach((d,i)=>{
+    const pts=d.pts.map(([lat,lon,t])=>({lat,lon,t:t||'r'}));
+    const g={id:'s'+d.id,sid:d.id,base:d.version,name:d.name,file:'',color:PAL[i%PAL.length],pts,server:clone(pts),serverName:d.name,undo:[],redo:[],versions:[],dismissed:{},visible:true,dirty:false};
+    try{
+      const dr=JSON.parse(localStorage.getItem(DK+d.id)||'null');
+      const pend=justSent.get(d.id),own=!!pend&&pend===d.invio;
+      if(pend&&(own||!dr||dr.base!==d.version))justSent.delete(d.id);
+      if(dr&&dr.base===d.version){g.pts=dr.pts;g.name=dr.name;g.dirty=true;}
+      else if(dr){localStorage.removeItem(DK+d.id);if(!own){const nm=dr.name+' (tua bozza)';local.push(mkLocal(nm,dr.pts));lost.push([d.name,nm]);}}
+      g.dismissed=JSON.parse(localStorage.getItem(IK+d.id)||'{}');
+    }catch(e){}
+    gite.push(g);
+  });
+  local.forEach(g=>{g.color=PAL[gite.length%PAL.length];gite.push(g);});
+  if(lost.length){toast(lost.map(([a,b])=>'"'+a+'" è stata aggiornata da un collega: la tua bozza è conservata come "'+b+'"').join('. '));save();}
+  const k=keep&&gite.find(g=>g.sid===keep);
+  if(k){act=k;$('#name').value=k.name;}
+}
+
+/* ---------- mappa ---------- */
+const map=L.map('map',{zoomControl:false}).setView([43.81,11.145],14);
+L.control.zoom({position:'topright'}).addTo(map);
+const base={
+  'Stradale':L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd',attribution:'&copy; OpenStreetMap &copy; CARTO'}),
+  'OpenStreetMap':L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap'}),
+  'Satellite':L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'&copy; Esri'})
+};
+base['Stradale'].addTo(map);
+L.control.layers(base,null,{position:'topright'}).addTo(map);
+L.control.scale({imperial:false,position:'bottomright'}).addTo(map);
+[['casing',405],['cmp',408],['sel',412],['lines',420],['seq',430]].forEach(([n,z])=>{map.createPane(n).style.zIndex=z;});
+
+const groups={}, vLayer=L.layerGroup().addTo(map), sLayer=L.layerGroup().addTo(map), aLayer=L.layerGroup().addTo(map), cLayer=L.layerGroup().addTo(map), qLayer=L.layerGroup().addTo(map);
+
+function renderGita(g){
+  let grp=groups[g.id];if(!grp)grp=groups[g.id]=L.layerGroup().addTo(map);
+  grp.clearLayers();if(!g.visible)return;
+  const isA=g===act;
+  for(const r of runs(g.pts)){
+    const ll=g.pts.slice(r.a,r.b+1).map(p=>[p.lat,p.lon]);
+    if(isA){
+      L.polyline(ll,{pane:'casing',color:'#fff',weight:10,opacity:.9,interactive:false}).addTo(grp);
+      L.polyline(ll,{pane:'lines',color:r.t==='t'?'#46535A':g.color,weight:r.t==='t'?4:5,dashArray:r.t==='t'?'9 7':null,opacity:1}).on('click',onLineClick).addTo(grp);
+    } else {
+      L.polyline(ll,{pane:'lines',color:g.color,weight:3,opacity:act?.45:.8,dashArray:r.t==='t'?'6 6':null}).on('click',e=>{L.DomEvent.stop(e);activate(g,true);}).addTo(grp);
+    }
+  }
+  if(isA){
+    const P=g.pts,ic=(c,t)=>L.divIcon({className:'se '+c,html:t,iconSize:[22,22]});
+    L.marker([P[0].lat,P[0].lon],{icon:ic('s','P'),interactive:false,keyboard:false,zIndexOffset:-200}).addTo(grp);
+    L.marker([P[P.length-1].lat,P[P.length-1].lon],{icon:ic('e','A'),interactive:false,keyboard:false,zIndexOffset:-200}).addTo(grp);
+  }
+}
+function onLineClick(e){
+  L.DomEvent.stop(e);let best=0,bd=Infinity;const p={lat:e.latlng.lat,lon:e.latlng.lng};
+  act.pts.forEach((q,i)=>{const d=hv(p,q);if(d<bd){bd=d;best=i;}});
+  sel={a:best,b:best,anchor:best};
+  if(map.getZoom()<17)map.setView([act.pts[best].lat,act.pts[best].lon],17,{animate:!RM});
+  refreshSel();
+}
+
+function renderVertices(){
+  vLayer.clearLayers();const hint=$('#hint');
+  if(!act||!act.visible){hint.hidden=true;return;}
+  if(map.getZoom()<16){hint.hidden=false;hint.textContent='Avvicina la mappa per vedere e modificare i punti';return;}
+  hint.hidden=true;
+  const b=map.getBounds().pad(.15),P=act.pts,inb=P.map(p=>b.contains([p.lat,p.lon]));
+  let n=0;
+  for(let i=0;i<P.length;i++){
+    if(!inb[i])continue;n++;
+    const on=sel&&i>=sel.a&&i<=sel.b,sz=on?16:12;
+    const m=L.marker([P[i].lat,P[i].lon],{icon:L.divIcon({className:'vx'+(on?' on':''),iconSize:[sz,sz]}),draggable:true,keyboard:false,zIndexOffset:on?1000:500,title:'Punto '+(i+1)});
+    m.on('click',e=>{
+      L.DomEvent.stop(e);
+      const grp=[];P.forEach((q,j)=>{if(hv(q,P[i])<3)grp.push(j);});
+      let t=i;
+      if(grp.length>1){
+        const cur=sel&&sel.a===sel.b?grp.indexOf(sel.a):-1;
+        t=cur>=0?grp[(cur+1)%grp.length]:grp[0];
+        toast('Qui la gita passa '+grp.length+' volte: selezionato il passaggio '+(grp.indexOf(t)+1)+'. Clicca di nuovo per il successivo.');
+      }
+      selectPoint(t,e.originalEvent.shiftKey);
+    });
+    m.on('dragstart',()=>{pushUndo();sel={a:i,b:i,anchor:i};});
+    m.on('drag',e=>{const ll=e.target.getLatLng();P[i].lat=ll.lat;P[i].lon=ll.lng;renderGita(act);renderSel();});
+    m.on('dragend',()=>afterEdit());
+    m.addTo(vLayer);
+  }
+  if(n>600)return;
+  for(let i=0;i<P.length-1;i++){
+    if(!inb[i]||!inb[i+1]||hv(P[i],P[i+1])<14)continue;
+    const mid=[(P[i].lat+P[i+1].lat)/2,(P[i].lon+P[i+1].lon)/2];
+    L.marker(mid,{icon:L.divIcon({className:'mid',iconSize:[10,10]}),keyboard:false,zIndexOffset:100,title:'Aggiungi un punto qui'})
+      .on('click',e=>{L.DomEvent.stop(e);pushUndo();P.splice(i+1,0,{lat:mid[0],lon:mid[1],t:P[i].t});sel={a:i+1,b:i+1,anchor:i+1};afterEdit();toast('Punto aggiunto: trascinalo dove serve');})
+      .addTo(vLayer);
+  }
+}
+function renderSel(){
+  sLayer.clearLayers();if(!sel||!act)return;
+  const P=act.pts;
+  if(sel.a===sel.b)L.circleMarker([P[sel.a].lat,P[sel.a].lon],{pane:'sel',radius:14,color:'#8a6d00',weight:1,fillColor:'#F2C230',fillOpacity:.55,interactive:false}).addTo(sLayer);
+  else L.polyline(P.slice(sel.a,sel.b+1).map(p=>[p.lat,p.lon]),{pane:'sel',color:'#F2C230',weight:16,opacity:.7,interactive:false}).addTo(sLayer);
+}
+function selectPoint(i,ext){
+  if(ext&&sel){const an=sel.anchor??sel.a;sel={a:Math.min(an,i),b:Math.max(an,i),anchor:an};}
+  else sel={a:i,b:i,anchor:i};
+  refreshSel();
+}
+function refreshSel(){renderSel();renderVertices();renderSelPanel();}
+
+/* ---------- anomalie ---------- */
+function anomalies(g){
+  const P=g.pts,th=+$('#gapth').value||250,c=cum(P),out=[];
+  for(let i=0;i<P.length-1;i++){const d=hv(P[i],P[i+1]);if(d>th)out.push({k:'gap:'+key(P[i])+'|'+key(P[i+1]),type:'gap',a:i,b:i+1,at:c[i],label:'Segmento di '+Math.round(d)+' m senza punti intermedi',lat:(P[i].lat+P[i+1].lat)/2,lon:(P[i].lon+P[i+1].lon)/2});}
+  for(let i=1;i<P.length-1;i++){
+    const a=P[i-1],b=P[i],n=P[i+1],d1=hv(a,b),d2=hv(b,n);if(d1<3||d2<3)continue;
+    const k=Math.cos(b.lat*Math.PI/180),v1=[(b.lon-a.lon)*k,b.lat-a.lat],v2=[(n.lon-b.lon)*k,n.lat-b.lat];
+    const cs=(v1[0]*v2[0]+v1[1]*v2[1])/(Math.hypot(...v1)*Math.hypot(...v2));
+    if(cs<-0.9){const sp=Math.max(d1,d2)<30;out.push({k:(sp?'spk:':'inv:')+key(b),type:sp?'spike':'inv',a:i-1,b:i+1,at:c[i],label:sp?'Andata e ritorno di '+Math.round(Math.max(d1,d2))+' m: possibile clic sbagliato':'Inversione a U',lat:b.lat,lon:b.lon});}
+  }
+  return out.sort((x,y)=>x.at-y.at);
+}
+const openAn = g => anomalies(g).filter(a=>a.type!=='inv'&&!g.dismissed[a.k]);
+function visibleAn(){if(!act)return[];const inv=$('#showinv').checked;return anomalies(act).filter(a=>!act.dismissed[a.k]&&(inv||a.type!=='inv'));}
+function renderAnom(){
+  aLayer.clearLayers();if(!act||!act.visible)return;
+  for(const a of visibleAn()){
+    L.marker([a.lat,a.lon],{icon:L.divIcon({className:'an '+a.type,html:a.type==='inv'?'U':'!',iconSize:[20,20]}),zIndexOffset:300,keyboard:false,title:a.label})
+      .on('click',e=>{L.DomEvent.stop(e);goTo(a);}).addTo(aLayer);
+  }
+}
+function goTo(a){sel={a:a.a,b:a.b,anchor:a.a};map.setView([a.lat,a.lon],18,{animate:!RM});refreshSel();}
+
+/* ---------- confronto e sequenza ---------- */
+function renderCmp(){
+  cLayer.clearLayers();$('#cmp').classList.toggle('on',cmpOn);
+  $('#cmp').textContent=cmpOn?'Nascondi il confronto':'Confronta con la versione sul server';
+  if(!act||!cmpOn||!act.server)return;
+  L.polyline(act.server.map(p=>[p.lat,p.lon]),{pane:'cmp',color:'#7A5CC2',weight:3,dashArray:'4 6',opacity:.95,interactive:false}).addTo(cLayer);
+}
+function renderSeq(){
+  qLayer.clearLayers();const bar=$('#seqbar');
+  if(!act){bar.hidden=true;return;}bar.hidden=false;
+  const P=act.pts,c=cum(P),tot=c[c.length-1],pos=seqPos/1000*tot;
+  $('#seqlbl').textContent=fmtKm(pos)+' di '+fmtKm(tot);
+  if(!seqOn)return;
+  let i=0;while(i<P.length-2&&c[i+1]<pos)i++;
+  const f=c[i+1]>c[i]?(pos-c[i])/(c[i+1]-c[i]):0,here={lat:P[i].lat+(P[i+1].lat-P[i].lat)*f,lon:P[i].lon+(P[i+1].lon-P[i].lon)*f};
+  const ahead=[[here.lat,here.lon]];let j=i+1;
+  while(j<P.length&&c[j]<=pos+300){ahead.push([P[j].lat,P[j].lon]);j++;}
+  if(j<P.length){const g=(pos+300-c[j-1])/(c[j]-c[j-1]);ahead.push([P[j-1].lat+(P[j].lat-P[j-1].lat)*g,P[j-1].lon+(P[j].lon-P[j-1].lon)*g]);}
+  L.polyline(ahead,{pane:'seq',color:'#D9480F',weight:7,opacity:.95,interactive:false}).addTo(qLayer);
+  L.marker([here.lat,here.lon],{icon:L.divIcon({className:'pos',iconSize:[18,18]}),interactive:false,keyboard:false,zIndexOffset:2000}).addTo(qLayer);
+  if(timer&&!map.getBounds().pad(-.2).contains([here.lat,here.lon]))map.panTo([here.lat,here.lon],{animate:!RM});
+}
+function stopPlay(){clearInterval(timer);timer=null;$('#play').textContent='Segui';}
+$('#play').onclick=()=>{
+  if(timer){stopPlay();return;}
+  seqOn=true;if(seqPos>=1000)seqPos=0;$('#play').textContent='Pausa';
+  timer=setInterval(()=>{seqPos=Math.min(1000,seqPos+1);$('#seq').value=seqPos;renderSeq();if(seqPos>=1000)stopPlay();},70);
+};
+$('#seq').oninput=e=>{seqOn=true;seqPos=+e.target.value;renderSeq();};
+
+/* ---------- pannello ---------- */
+function renderList(){
+  const ul=$('#list');ul.innerHTML='';
+  for(const g of gite){
+    const n=openAn(g).length,li=document.createElement('li');
+    li.className='gi'+(g===act?' on':'');
+    li.innerHTML=`<button class="eye" aria-label="${g.visible?'Nascondi':'Mostra'} gita">${g.visible?'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>':'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.1 3.9M6.3 6.3A17 17 0 0 0 2 12s3.5 7 10 7a9.6 9.6 0 0 0 5.7-1.7"/></svg>'}</button><span class="sw" style="background:${g.color}"></span><span class="nm"></span><span class="km">${fmtKm(lengths(g.pts).tot)}</span>${n?`<span class="bd" title="Da verificare">${n}</span>`:'<span class="ok">ok</span>'}`;
+    li.querySelector('.nm').textContent=g.name+(g.sid?'':' (nuova)');
+    if(g.dirty){const d=document.createElement('span');d.className='dt';d.title='Bozza non inviata al server';li.querySelector('.nm').append(' ');li.querySelector('.nm').appendChild(d);d.style.display='inline-block';}
+    li.querySelector('.eye').onclick=e=>{e.stopPropagation();g.visible=!g.visible;renderGita(g);if(g===act){renderVertices();renderAnom();}renderList();save();};
+    li.onclick=()=>activate(g,true);
+    ul.appendChild(li);
+  }
+}
+function renderStats(){
+  const L_=lengths(act.pts);
+  $('#stats').innerHTML=`<div class="st"><b>${fmtKm(L_.tot)}</b><span>totale</span></div><div class="st"><b>${fmtKm(L_.r)}</b><span>raccolta</span></div><div class="st"><b>${fmtKm(L_.t)}</b><span>trasferimento</span></div>`;
+  const s=$('#state');s.className=act.dirty?'dirty':'';
+  s.textContent=(!act.sid?'Gita nuova, non ancora sul server':act.dirty?'Bozza non inviata, basata sulla versione '+act.base+' del server':'Uguale alla versione '+act.base+' del server')+', '+act.pts.length+' punti';
+  $('#undo').disabled=!act.undo.length;$('#redo').disabled=!act.redo.length;
+}
+function renderSelPanel(){
+  if(!act)return;
+  const info=$('#selinfo'),P=act.pts,bt=a=>document.querySelector(`#selbox [data-a="${a}"]`);
+  if(sel&&(sel.b>=P.length))sel=null;
+  if(!sel){info.className='empty';info.textContent='Nessun punto selezionato.';}
+  else if(sel.a===sel.b){info.className='';info.textContent='Punto '+(sel.a+1)+' di '+P.length+', al '+fmtKm(cum(P)[sel.a]);}
+  else{info.className='';const c=cum(P);info.textContent='Tratto dal punto '+(sel.a+1)+' al '+(sel.b+1)+', '+fmtM(c[sel.b]-c[sel.a]);}
+  const none=!sel,single=sel&&sel.a===sel.b;
+  bt('del').disabled=none;bt('tr').disabled=none||single;bt('rc').disabled=none||single;
+  bt('ts').disabled=none||sel.a===0;bt('te').disabled=none||sel.b>=P.length-1;
+  bt('split').disabled=none||!single||sel.a===0||sel.a>=P.length-1;
+}
+function renderAnPanel(){
+  const list=visibleAn(),ul=$('#anlist');ul.innerHTML='';
+  const open=openAn(act).length,cnt=$('#ancount');cnt.textContent=open;cnt.className='count'+(open?'':' zero');
+  if(!list.length){ul.innerHTML='<li class="none" style="cursor:default">Nessuna segnalazione aperta.</li>';}
+  for(const a of list){
+    const li=document.createElement('li');
+    const col=a.type==='gap'?'var(--warn)':a.type==='spike'?'var(--spike)':'#6C7A80';
+    li.innerHTML=`<span class="d" style="background:${col}"></span><span><span class="lb"></span><small>al ${fmtKm(a.at)}</small></span><button class="link">Va bene così</button>`;
+    li.querySelector('.lb').textContent=a.label;
+    li.querySelector('button').onclick=e=>{e.stopPropagation();act.dismissed[a.k]=true;save();renderAnom();renderAnPanel();renderList();toast('Segnalazione chiusa');};
+    li.onclick=()=>goTo(a);ul.appendChild(li);
+  }
+  const ign=Object.keys(act.dismissed).length,u=$('#unign');u.hidden=!ign;u.textContent='Riapri '+ign+(ign===1?' segnalazione chiusa':' segnalazioni chiuse');
+}
+function renderServer(){
+  $('#srvinfo').textContent=!act.sid?'Questa gita esiste solo qui: inviandola verrà creata sul server.':act.dirty?'Le modifiche sono salvate su questo computer. Inviale per renderle visibili a tutti.':'Nessuna modifica rispetto al server.';
+  $('#send').disabled=!act.dirty&&!!act.sid;$('#discard').hidden=!act.dirty||!act.sid;$('#cmp').hidden=!act.sid;
+  $('#delg').textContent=act.sid?'Archivia gita':'Rimuovi gita';
+}
+function renderPanel(){
+  $('#empty').hidden=!!act;$('#act').hidden=!act;if(!act)return;
+  renderStats();renderSelPanel();renderAnPanel();renderServer();
+}
+
+/* ---------- modifiche ---------- */
+function pushUndo(){act.undo.push(clone(act.pts));if(act.undo.length>200)act.undo.shift();act.redo=[];}
+function afterEdit(){
+  act.dirty=true;
+  if(sel){sel.a=Math.min(sel.a,act.pts.length-1);sel.b=Math.min(sel.b,act.pts.length-1);}
+  renderGita(act);renderVertices();renderSel();renderAnom();renderPanel();renderList();renderSeq();save();
+}
+function undo(){if(!act||!act.undo.length)return;act.redo.push(clone(act.pts));act.pts=act.undo.pop();sel=null;afterEdit();toast('Modifica annullata');}
+function redo(){if(!act||!act.redo.length)return;act.undo.push(clone(act.pts));act.pts=act.redo.pop();sel=null;afterEdit();}
+
+const ACTIONS={
+  del(){const n=sel.b-sel.a+1;if(act.pts.length-n<2){toast('Una gita deve avere almeno due punti');return;}pushUndo();act.pts.splice(sel.a,n);sel=null;afterEdit();toast(n===1?'Punto eliminato':n+' punti eliminati');},
+  tr(){setType('t');}, rc(){setType('r');},
+  ts(){pushUndo();const n=sel.a;act.pts.splice(0,n);sel=null;afterEdit();toast('Rimossi '+n+' punti iniziali');},
+  te(){pushUndo();const n=act.pts.length-sel.b-1;act.pts.splice(sel.b+1);sel=null;afterEdit();toast('Rimossi '+n+' punti finali');},
+  split(){
+    const i=sel.a,tail=clone(act.pts.slice(i));pushUndo();act.pts.splice(i+1);
+    const g=newGita(act.name+' (parte 2)',act.file,tail,'Separata da "'+act.name+'"');g.color=PAL[(PAL.indexOf(act.color)+3)%PAL.length];
+    gite.splice(gite.indexOf(act)+1,0,g);sel=null;renderGita(g);afterEdit();toast('Gita divisa: la seconda parte è in elenco');
+  }
+};
+function setType(t){pushUndo();for(let i=sel.a;i<sel.b;i++)act.pts[i].t=t;afterEdit();toast(t==='t'?'Tratto segnato come trasferimento':'Tratto segnato come raccolta');}
+document.querySelectorAll('#selbox [data-a]').forEach(b=>b.onclick=()=>{if(sel)ACTIONS[b.dataset.a]();});
+
+$('#undo').onclick=undo;$('#redo').onclick=redo;
+$('#fit').onclick=()=>fitAct();
+$('#rev').onclick=()=>{pushUndo();const P=act.pts,n=P.length,ty=P.map(p=>p.t);P.reverse();for(let j=0;j<n-1;j++)P[j].t=ty[n-2-j];P[n-1].t='r';sel=null;afterEdit();toast('Senso di marcia invertito');};
+$('#name').oninput=e=>{act.name=e.target.value;act.dirty=act.name!==act.serverName||act.dirty;renderStats();renderServer();renderList();save();};
+function send(payload){window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:setComponentValue',value:payload,dataType:'json'},'*');}
+$('#send').onclick=()=>{
+  if(!USER){toast('Scrivi il tuo nome nella barra laterale prima di inviare');return;}
+  const note=$('#vnote').value.trim()||'Correzioni';
+  const nonce=Date.now()+'-'+Math.random().toString(36).slice(2);
+  if(act.sid)justSent.set(act.sid,nonce);
+  $('#send').disabled=true;$('#send').textContent='Invio…';
+  send({action:act.sid?'save':'create',gita_id:act.sid||null,base:act.base||null,name:act.name,note,local_id:act.id,
+    pts:act.pts.map(p=>[+p.lat.toFixed(6),+p.lon.toFixed(6),p.t]),nonce});
+};
+$('#vnote').onkeydown=e=>{if(e.key==='Enter')$('#send').click();};
+$('#cmp').onclick=()=>{cmpOn=!cmpOn;renderCmp();if(cmpOn)toast('Versione del server in viola tratteggiato');};
+$('#discard').onclick=()=>{
+  if(!confirm('Scartare la bozza di "'+act.name+'" e tornare alla versione del server?'))return;
+  pushUndo();act.pts=clone(act.server);act.name=act.serverName;$('#name').value=act.name;act.dirty=false;sel=null;
+  renderGita(act);renderVertices();renderSel();renderAnom();renderPanel();renderList();renderSeq();save();toast('Bozza scartata');
+};
+$('#gapth').oninput=()=>{renderAnom();if(act)renderAnPanel();renderList();};
+$('#showinv').onchange=()=>{renderAnom();renderAnPanel();};
+$('#unign').onclick=()=>{act.dismissed={};save();renderAnom();renderAnPanel();renderList();};
+$('#delg').onclick=()=>{
+  if(act.sid){
+    if(!USER){toast('Scrivi il tuo nome nella barra laterale prima di archiviare');return;}
+    if(!confirm('Archiviare "'+act.name+'"? Sparirà dall\'editor ma resterà nello storico, da dove si può riattivare.'))return;
+    send({action:'archive',gita_id:act.sid,nonce:Date.now()+'-'+Math.random().toString(36).slice(2)});return;
+  }
+  if(!confirm('Rimuovere "'+act.name+'"? Non è ancora sul server, quindi andrà persa.'))return;
+  groups[act.id]?.remove();delete groups[act.id];gite.splice(gite.indexOf(act),1);act=null;sel=null;renderAll();save();
+};
+
+/* ---------- generale ---------- */
+function activate(g,fit){
+  if(act===g){if(fit)fitAct();return;}
+  stopPlay();act=g;sel=null;cmpOn=false;seqOn=false;seqPos=0;$('#seq').value=0;
+  if(!g.visible)g.visible=true;
+  $('#name').value=g.name;
+  gite.forEach(renderGita);renderAll(true);
+  if(fit)fitAct();
+}
+function fitAct(){if(!act)return;map.fitBounds(L.latLngBounds(act.pts.map(p=>[p.lat,p.lon])),{padding:[40,40],animate:!RM});}
+function fitAll(){const all=gite.flatMap(g=>g.pts.map(p=>[p.lat,p.lon]));if(all.length)map.fitBounds(L.latLngBounds(all),{padding:[30,30]});}
+function renderAll(skipLines){if(!skipLines)gite.forEach(renderGita);renderVertices();renderSel();renderAnom();renderCmp();renderPanel();renderList();renderSeq();}
+let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600);}
+
+map.on('moveend zoomend',renderVertices);
+map.on('click',()=>{if(sel){sel=null;refreshSel();}});
+document.addEventListener('keydown',e=>{
+  if(e.target.matches('input,textarea'))return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();}
+  else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redo();}
+  else if((e.key==='Delete'||e.key==='Backspace')&&sel&&act){e.preventDefault();ACTIONS.del();}
+  else if(e.key==='Escape'&&sel){sel=null;refreshSel();}
+});
+
+new ResizeObserver(()=>map.invalidateSize()).observe($('#map'));
+function setH(h){window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:setFrameHeight',height:h},'*');}
+window.addEventListener('message',e=>{
+  const d=e.data;if(!d||d.type!=='streamlit:render')return;
+  const a=d.args||{};
+  USER=a.user||'';$('#who').textContent=USER?'Stai lavorando come '+USER:'Nome non impostato';
+  if(a.height&&a.height!==HEIGHT){HEIGHT=a.height;document.body.style.height=HEIGHT+'px';}
+  setH(HEIGHT);
+  const m=a.msg,newMsg=!!(m&&m.nonce!==lastMsg);
+  if(a.data_version!==DATA_VERSION){
+    DATA=a.data||[];DATA_VERSION=a.data_version;fromServer();renderAll();
+    const first=!booted;booted=true;
+    setTimeout(()=>{map.invalidateSize();if(first)fitAll();else if(act)fitAct();},120);
+  }
+  if(newMsg){lastMsg=m.nonce;toast(m.text);
+    if(m.local_id&&m.ok){const g=gite.find(x=>x.id===m.local_id&&!x.sid);if(g){groups[g.id]?.remove();delete groups[g.id];gite.splice(gite.indexOf(g),1);renderAll();save();}}
+  }
+  $('#send').textContent='Invia';if(act)renderServer();
+  setTimeout(()=>map.invalidateSize(),50);
+});
+document.body.style.height=HEIGHT+'px';
+window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:componentReady',apiVersion:1},'*');
+</script>
+</body>
+</html>
