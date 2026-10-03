@@ -28,16 +28,14 @@ st.set_page_config(page_title="Percorsi · Cristoforo", page_icon=str(ICONA) if 
 st.markdown("""<style>
 :root{--verde:#009640;--verde-scuro:#007A34;--verde-chiaro:#E8F5EC;--inchiostro:#16301F}
 .block-container{padding-top:3.2rem;padding-bottom:1rem;max-width:100%}
-[data-testid="stSidebar"]{background:linear-gradient(180deg,#F1F8F3 0%,#FFFFFF 70%)}
 [data-testid="stBaseButton-primary"],[data-testid="stBaseButton-primaryFormSubmit"]{background:var(--verde)!important;border-color:var(--verde)!important;color:#fff!important}
 [data-testid="stBaseButton-primary"]:hover,[data-testid="stBaseButton-primaryFormSubmit"]:hover{background:var(--verde-scuro)!important;border-color:var(--verde-scuro)!important}
 [data-baseweb="tab-highlight"]{background-color:var(--verde)!important}
 .stTabs [aria-selected="true"] p{color:var(--verde)!important;font-weight:600}
-h1,h2,h3{color:var(--inchiostro)}
-[data-testid="stMetricValue"]{color:var(--verde-scuro)}
+[data-testid="stMetricValue"]{color:var(--verde)}
 .titolo-pagina{display:flex;flex-direction:column;margin:0 0 2px;line-height:1.25}
-.titolo-pagina b{font-size:1.45rem;color:var(--inchiostro);white-space:nowrap}
-.titolo-pagina span{color:#5b6b62;font-size:.9rem}
+.titolo-pagina b{font-size:1.45rem;white-space:nowrap}
+.titolo-pagina span{opacity:.7;font-size:.9rem}
 </style>""", unsafe_allow_html=True)
 if LOGO.exists():
     try:
