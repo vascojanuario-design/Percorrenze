@@ -48,7 +48,9 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 - Pubblicazione: `meta.json` ha `pubblicata` = {n, data, autore}, impostato con `Archivio.pubblica()`. Gli operatori vedono solo la versione pubblicata, mai l'ultima bozza.
 - Utenti: campo `mezzo` (mezzo abituale, deve appartenere a uno dei cantieri dell'utente, `controlla_mezzo`).
 - Punti e note: `<wpt>` nel GPX con `<name>`, `<desc>` (testo) e `<type>` (cassonetto, utenza, attenzione, accesso, nota: `TIPI_WAYPOINT` in archivio.py, `TIPI_WP` nell'editor, devono coincidere). `Archivio.contenuto()` restituisce (punti, waypoint); ogni versione registra `note_mappa`. Nell'editor stanno in `g.wp`, sono incluse in annulla/ripeti, bozze e invio (`wpts`).
-- Disegno: `modo` = 'disegna' | 'punto' | null; `clickMappa()` aggiunge punti alla fine o dopo il punto selezionato. "Nuova gita da disegnare" crea una gita locale vuota (le funzioni gestiscono gite con 0 o 1 punto).
+- Disegno: `modo` = 'disegna' | 'punto' | null; `clickMappa()` aggiunge punti alla fine o dopo il punto selezionato.
+- Pagina "Crea una nuova gita" (`pagina_crea()`, `st.session_state.pagina == "crea"`): barra laterale nascosta, editor con argomento `mode="crea"` (classe `modo-crea`, elementi `.solo-crea` / `.solo-editor`, altezza dalla finestra). Le bozze sono gite con `stato: "bozza"` in meta.json: `elenco()` le esclude, `elenco(bozze=True)` le restituisce, `Archivio.concludi()` toglie lo stato. Azioni dell'editor con `stato` = 'bozza' | 'concludi' | null, gestite da `gestisci()` in app.py.
+- Stile: verde Cristoforo `#009640` (CSS in app.py, `--brand` nell'editor, `primaryColor` in .streamlit/config.toml); logo e icona in `assets/`.
 - Pagina operatore: gite pubblicate del mezzo per il giorno (fuso Europe/Rome, `an.adesso()`), ordinate per turno e numero; sostituzione giornaliera in `st.session_state.sostituzione` = (data, mezzo).
 
 ### Punti e tratti
@@ -88,7 +90,7 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 
 ## Prossimi passi, in ordine
 
-Fatto: accessi con ruoli, cantieri, mezzi, assegnazione delle gite (mezzo, numero, turno, giorni), pubblicazione delle versioni, mezzo abituale degli operatori, vista "Oggi" con sostituzioni, punti e note sulla mappa (waypoint), disegno di gite da zero.
+Fatto: accessi con ruoli, cantieri, mezzi, assegnazione delle gite (mezzo, numero, turno, giorni), pubblicazione delle versioni, mezzo abituale degli operatori, vista "Oggi" con sostituzioni, punti e note sulla mappa (waypoint), pagina "Crea una nuova gita" con bozze sul server, stile e logo Cristoforo.
 
 Prossimo nel portale: **foglio di marcia** in PDF (elenco vie nell'ordine di percorrenza, note, mappa) per sostituti e affiancamenti; poi accesso che resta ricaricando la pagina e nome automatico delle gite.
 
@@ -97,6 +99,8 @@ Telefoni degli operatori: Samsung e Redmi (Android), personali o assegnati alla 
 1. **Pilota con OsmAnd** su due o tre gite: verificare se la navigazione lungo la traccia regge i ripassi.
 2. **App per gli operatori (web app installabile su Android)**, separata da Streamlit: accesso che resta sul telefono, vista "Oggi", guida integrata con la logica "Segui" (tratto attuale e prossimi 300 m), ripasso animato del giro prima del turno, note sui punti critici, mappa offline, segnalazioni con foto, conferma di fine giro senza tracciamento GPS. Sui Redmi va tolta la restrizione della batteria.
 5. **App nativa e registrazione delle tracce** per la fase di verifica.
+
+Sfondi da valutare: Google satellite con vie tramite la Map Tiles API ufficiale (chiave nei Secrets, sessione creata lato server, attribuzione Google; 100.000 riquadri al mese gratuiti) oppure le ortofoto della Regione Toscana (gratuite, da verificare). Mai usare indirizzi non ufficiali delle immagini di Google.
 
 Più avanti: aggancio automatico alle strade (Valhalla, profilo camion), punti di raccolta lungo il percorso, collegamento con il modulo di gestione esistente, database PostGIS.
 

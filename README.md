@@ -27,11 +27,22 @@ Gli altri utenti si creano dalla scheda **Utenti**. Ognuno può cambiare la prop
 
 Ogni gita appartiene a un cantiere e a un mezzo; un mezzo può avere più gite (gita 1, 2, 3…), ognuna con turno e giorni. Si gestisce tutto dalla scheda **Flotta**, scegliendo il cantiere nella barra laterale. Le gite importate senza cantiere compaiono all'amministratore sotto "Senza cantiere", da dove si assegnano.
 
-## Disegnare gite e aggiungere punti e note
+## Creare gite senza GPX (pagina "Crea una nuova gita")
 
-Nell'editor, sezione **Disegno, punti e note**:
+Dal pulsante verde **Crea una nuova gita** nella barra laterale si apre un'area di lavoro a tutto schermo:
 
-- **Nuova gita da disegnare** (sotto l'elenco delle gite) crea una gita vuota: dai un nome e clicca sulla mappa, ogni clic aggiunge un punto. Con **Disegna percorso** si allunga anche una gita esistente; se è selezionato un punto, i nuovi vengono inseriti subito dopo. **Esc** termina, **Annulla** toglie l'ultimo punto.
+1. scegli in alto cantiere e, se lo sai già, il mezzo;
+2. **+ Nuovo progetto**, scrivi il nome e disegna cliccando sulla mappa (barra degli strumenti sopra la mappa: Disegna, Punto d'interesse, Annulla, Ripeti, Inquadra);
+3. aggiungi i punti d'interesse;
+4. **Salva bozza** per salvare sul server e riprendere quando vuoi, **Concludi la gita** quando è finita.
+
+I progetti in corso sono gite con stato "bozza": stanno sul server, li vedono i colleghi del cantiere, ma non compaiono nell'editor delle gite, nello storico né agli operatori. Concludendo, la gita passa tra quelle del cantiere, pronta per essere assegnata e pubblicata.
+
+## Punti d'interesse e note
+
+Nell'editor, sezione **Percorso e punti d'interesse**:
+
+- Con **Disegna percorso** si allunga una gita esistente; se è selezionato un punto, i nuovi vengono inseriti subito dopo. **Esc** termina, **Annulla** toglie l'ultimo punto.
 - **Aggiungi punto o nota**: clic sulla mappa, poi scegli il tipo (cassonetti, utenza critica, attenzione, accesso, nota) e scrivi il testo. I punti si trascinano e si eliminano come quelli del percorso.
 
 Punti e note vengono salvati nel GPX della gita come waypoint, insieme al percorso e con lo stesso storico delle versioni. OsmAnd li mostra sulla mappa quando l'operatore apre il giro.

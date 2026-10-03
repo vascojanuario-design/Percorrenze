@@ -21,11 +21,29 @@ HEADER_UTENTE = os.environ.get("PERCORSI_HEADER_UTENTE", "X-Remote-User")
 ALTEZZA_EDITOR = 820
 TUTTI, SENZA = "*", "-"
 
-st.set_page_config(page_title="Percorsi", page_icon="🗺️", layout="wide")
-st.markdown(
-    "<style>.block-container{padding-top:3.2rem;padding-bottom:1rem;max-width:100%}</style>",
-    unsafe_allow_html=True,
-)
+LOGO = BASE / "assets" / "logo.png"
+ICONA = BASE / "assets" / "icona.png"
+
+st.set_page_config(page_title="Percorsi · Cristoforo", page_icon=str(ICONA) if ICONA.exists() else "🗺️", layout="wide")
+st.markdown("""<style>
+:root{--verde:#009640;--verde-scuro:#007A34;--verde-chiaro:#E8F5EC;--inchiostro:#16301F}
+.block-container{padding-top:3.2rem;padding-bottom:1rem;max-width:100%}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#F1F8F3 0%,#FFFFFF 70%)}
+[data-testid="stBaseButton-primary"],[data-testid="stBaseButton-primaryFormSubmit"]{background:var(--verde)!important;border-color:var(--verde)!important;color:#fff!important}
+[data-testid="stBaseButton-primary"]:hover,[data-testid="stBaseButton-primaryFormSubmit"]:hover{background:var(--verde-scuro)!important;border-color:var(--verde-scuro)!important}
+[data-baseweb="tab-highlight"]{background-color:var(--verde)!important}
+.stTabs [aria-selected="true"] p{color:var(--verde)!important;font-weight:600}
+h1,h2,h3{color:var(--inchiostro)}
+[data-testid="stMetricValue"]{color:var(--verde-scuro)}
+.titolo-pagina{display:flex;flex-direction:column;margin:0 0 2px;line-height:1.25}
+.titolo-pagina b{font-size:1.45rem;color:var(--inchiostro);white-space:nowrap}
+.titolo-pagina span{color:#5b6b62;font-size:.9rem}
+</style>""", unsafe_allow_html=True)
+if LOGO.exists():
+    try:
+        st.logo(str(LOGO), icon_image=str(ICONA) if ICONA.exists() else None, size="large")
+    except TypeError:
+        st.logo(str(LOGO))
 
 editor = components.declare_component("editor_percorsi", path=str(BASE / "editor"))
 
@@ -87,7 +105,10 @@ if "chi" not in st.session_state:
 if "chi" not in st.session_state:
     _, centro, _ = st.columns([1, 1.2, 1])
     with centro:
-        st.title("Percorsi")
+        st.write("")
+        if LOGO.exists():
+            st.image(str(LOGO), width="stretch")
+        st.subheader("Percorsi di raccolta")
         st.write("Accedi con il nome utente e la password che ti ha dato l'amministratore.")
         if not ADMIN and not utenti_doc["utenti"]:
             st.warning("Nessun utente configurato. Aggiungi la sezione [amministratore] nei secrets dell'app "
@@ -133,7 +154,6 @@ def puo_modificare(m: dict) -> bool:
 # ================================================================ barra laterale
 
 with st.sidebar:
-    st.title("Percorsi")
     st.caption(chi["nome"] if chi["nome"].lower() == an.RUOLI[ruolo].lower() else f"{chi['nome']}, {an.RUOLI[ruolo].lower()}")
 
     opzioni = ([TUTTI] if amministratore else []) + miei_cantieri + ([SENZA] if amministratore else [])
@@ -149,9 +169,18 @@ with st.sidebar:
         mezzo_sel = st.selectbox("Mezzo", mezzi_opz, key=f"mezzo_sel_{cantiere_sel}",
                                  format_func=lambda m: "Tutti i mezzi" if m == TUTTI else an.etichetta_mezzo(flotte, m))
 
+    if ruolo != "operatore" and miei_cantieri:
+        if st.button("✏️  Crea una nuova gita", type="primary", width="stretch",
+                     help="Apre l'area di lavoro a tutto schermo per disegnare una gita senza GPX"):
+            st.session_state.pagina = "crea"
+            st.rerun()
+        n_bozze = len([m for m in archivio.elenco(bozze=True) if m.get("cantiere") in miei_cantieri])
+        if n_bozze:
+            st.caption(f"Progetti in corso: {n_bozze}")
+
     if ruolo != "operatore" and cantiere_sel:
         st.divider()
-        st.subheader("Aggiungi gite")
+        st.subheader("Carica gite da GPX")
         dest = cantiere_sel if cantiere_sel not in (TUTTI, SENZA) else None
         st.caption(f"Le gite caricate andranno in: {nome_cantiere(dest)}"
                    + (f", mezzo {an.etichetta_mezzo(flotte, mezzo_sel)}" if mezzo_sel not in (TUTTI, SENZA) else ""))
@@ -232,43 +261,89 @@ def contenuto_versione(gid: str, versione: int) -> tuple[list, list]:
 
 def scheda_editor():
     impronta = archivio.impronta()
+    risposta = editor(data=dati_per_editor(attive), data_version=f"{impronta}|{cantiere_sel}|{mezzo_sel}", user=utente,
+                      msg=st.session_state.get("msg"), height=ALTEZZA_EDITOR, key="editor", default=None)
+
+    gestisci(risposta, cantiere_sel if cantiere_sel not in (TUTTI, SENZA) else None,
+             mezzo_sel if mezzo_sel not in (TUTTI, SENZA) else None)
+
+
+def gestisci(risposta, dest_cantiere: str | None, dest_mezzo: str | None) -> None:
+    """Esegue sul server le azioni chieste dall'editor (salva, crea, concludi, archivia) e risponde all'editor."""
+    if not risposta or risposta.get("nonce") == st.session_state.get("ultimo_nonce"):
+        return
+    st.session_state.ultimo_nonce = risposta["nonce"]
+    azione, gid, nonce, stato = risposta.get("action"), risposta.get("gita_id"), risposta["nonce"], risposta.get("stato")
+    nome = risposta.get("name") or "Gita senza nome"
+    try:
+        if azione in ("save", "archive") and not puo_modificare(archivio.meta(gid)):
+            avviso("Non hai i permessi per modificare questa gita.", ok=False, nonce=nonce)
+        elif azione == "save":
+            testo = ""
+            if not risposta.get("solo_stato"):
+                n = archivio.salva(gid, risposta["pts"], utente,
+                                   risposta.get("note") or ("Bozza" if stato == "bozza" else "Correzioni"),
+                                   base=int(risposta["base"]), nome=nome, nonce=nonce, waypoint=risposta.get("wpts"))
+                testo = f"Salvata la versione {n} di {nome}"
+            if stato == "concludi":
+                if dest_mezzo and not archivio.meta(gid).get("mezzo"):
+                    archivio.assegna(gid, utente, mezzo=dest_mezzo)
+                archivio.concludi(gid, utente)
+                testo = f"Gita \"{nome}\" conclusa: la trovi nel portale, scheda Editor, pronta per essere pubblicata"
+            avviso(testo or "Nessuna modifica", nonce=nonce)
+        elif azione == "create":
+            nuovo = archivio.crea(nome, risposta["pts"], utente,
+                                  risposta.get("note") or ("Bozza" if stato == "bozza" else "Creata dall'editor"),
+                                  nonce=nonce, cantiere=dest_cantiere, mezzo=dest_mezzo, waypoint=risposta.get("wpts"),
+                                  stato="bozza" if stato == "bozza" else None)
+            avviso(f"Progetto \"{nome}\" salvato sul server" if stato == "bozza" else
+                   f"Gita \"{nome}\" creata" + (": la trovi nel portale, scheda Editor" if stato == "concludi" else ""),
+                   nonce=nonce, local_id=risposta.get("local_id"), gita_id=nuovo if stato == "bozza" else None)
+        elif azione == "archive":
+            bozza = archivio.meta(gid).get("stato") == "bozza"
+            archivio.archivia(gid, utente)
+            avviso("Progetto eliminato. Resta recuperabile dallo storico delle gite archiviate." if bozza else
+                   "Gita archiviata. Puoi riattivarla dallo storico.", nonce=nonce)
+    except Conflitto as c:
+        avviso(f"Non salvata: nel frattempo un collega ha inviato la versione {c.versione_attuale}. "
+               "La tua bozza è conservata come copia \"(tua bozza)\": confrontala con la nuova versione "
+               "e riporta lì le correzioni.", ok=False, nonce=nonce)
+    except (ValueError, KeyError, FileNotFoundError, ErroreArchivio) as e:
+        avviso(f"Non salvata: {e}", ok=False, nonce=nonce)
+    st.rerun()
+
+
+def dati_per_editor(gite: list[dict]) -> list[dict]:
     dati = []
-    for m in attive:
+    for m in gite:
         ultima = m["versioni"][-1]
         pts, wpts = contenuto_versione(m["id"], ultima["n"])
         dati.append({"id": m["id"], "name": m["nome"], "version": ultima["n"], "invio": ultima.get("invio"),
                      "pts": pts, "wpts": wpts})
-    risposta = editor(data=dati, data_version=f"{impronta}|{cantiere_sel}|{mezzo_sel}", user=utente,
-                      msg=st.session_state.get("msg"), height=ALTEZZA_EDITOR, key="editor", default=None)
+    return dati
 
-    if not risposta or risposta.get("nonce") == st.session_state.get("ultimo_nonce"):
-        return
-    st.session_state.ultimo_nonce = risposta["nonce"]
-    azione, gid, nonce = risposta.get("action"), risposta.get("gita_id"), risposta["nonce"]
-    try:
-        if azione in ("save", "archive") and not puo_modificare(archivio.meta(gid)):
-            avviso("Non hai i permessi per modificare questa gita.", ok=False, nonce=nonce, gita_id=gid)
-        elif azione == "save":
-            n = archivio.salva(gid, risposta["pts"], utente, risposta.get("note") or "Correzioni",
-                               base=int(risposta["base"]), nome=risposta.get("name"), nonce=nonce,
-                               waypoint=risposta.get("wpts"))
-            avviso(f"Salvata la versione {n} di {risposta.get('name')}", nonce=nonce)
-        elif azione == "create":
-            dest = cantiere_sel if cantiere_sel not in (TUTTI, SENZA) else None
-            archivio.crea(risposta.get("name") or "Gita senza nome", risposta["pts"], utente,
-                          risposta.get("note") or "Creata dall'editor", nonce=nonce, cantiere=dest,
-                          mezzo=mezzo_sel if mezzo_sel not in (TUTTI, SENZA) else None, waypoint=risposta.get("wpts"))
-            avviso(f"Creata la gita {risposta.get('name')}", nonce=nonce, local_id=risposta.get("local_id"))
-        elif azione == "archive":
-            archivio.archivia(gid, utente)
-            avviso("Gita archiviata. Puoi riattivarla dallo storico.", nonce=nonce)
-    except Conflitto as c:
-        avviso(f"Non salvata: nel frattempo un collega ha inviato la versione {c.versione_attuale}. "
-               "La tua bozza è conservata come copia \"(tua bozza)\": confrontala con la nuova versione "
-               "e riporta lì le correzioni.", ok=False, nonce=nonce, gita_id=gid)
-    except (ValueError, KeyError, FileNotFoundError, ErroreArchivio) as e:
-        avviso(f"Non salvata: {e}", ok=False, nonce=nonce)
-    st.rerun()
+
+# ================================================================ crea gita (a tutto schermo)
+
+def pagina_crea():
+    st.markdown("<style>[data-testid='stSidebar'],[data-testid='stSidebarCollapsedControl'],"
+                "[data-testid='stExpandSidebarButton']{display:none!important}"
+                ".block-container{padding-top:2.4rem!important}</style>", unsafe_allow_html=True)
+    testa = st.columns([3.2, 2, 2, 1.5], vertical_alignment="bottom")
+    testa[0].markdown("<div class='titolo-pagina'><b>Crea una nuova gita</b>"
+                      "<span>disegna il percorso e i punti d'interesse</span></div>", unsafe_allow_html=True)
+    if testa[3].button("← Torna al portale", width="stretch"):
+        st.session_state.pagina = None
+        st.rerun()
+    cant = testa[1].selectbox("Cantiere", miei_cantieri, format_func=nome_cantiere, key="crea_cantiere",
+                              index=miei_cantieri.index(cantiere_sel) if cantiere_sel in miei_cantieri else 0)
+    mezzi = [None] + an.mezzi_del_cantiere(flotte, cant, solo_attivi=True)
+    mez = testa[2].selectbox("Mezzo", mezzi, key=f"crea_mezzo_{cant}",
+                             format_func=lambda k: "Da decidere" if not k else an.etichetta_mezzo(flotte, k))
+    bozze = sorted([m for m in archivio.elenco(bozze=True) if m.get("cantiere") == cant], key=lambda m: m["nome"].lower())
+    risposta = editor(data=dati_per_editor(bozze), data_version=f"{archivio.impronta()}|crea|{cant}", user=utente,
+                      msg=st.session_state.get("msg"), height=ALTEZZA_EDITOR, mode="crea", key="editor_crea", default=None)
+    gestisci(risposta, cant, mez)
 
 
 def descrizione_gita(m: dict) -> str:
@@ -367,7 +442,7 @@ def conta(gite: list[dict], campo: str) -> dict:
 
 
 def scheda_flotta():
-    tutte = archivio.elenco() + archivio.elenco(archiviate=True)
+    tutte = archivio.elenco() + archivio.elenco(archiviate=True) + archivio.elenco(bozze=True)
 
     if amministratore:
         st.subheader("Cantieri")
@@ -662,6 +737,8 @@ def scheda_operatore():
 
 if ruolo == "operatore":
     scheda_operatore()
+elif st.session_state.get("pagina") == "crea" and miei_cantieri:
+    pagina_crea()
 else:
     nomi = ["Editor", "Storico versioni", "Flotta"] + (["Utenti"] if amministratore else [])
     schede = dict(zip(nomi, st.tabs(nomi)))

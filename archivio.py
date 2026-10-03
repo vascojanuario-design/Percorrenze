@@ -358,9 +358,10 @@ class Archivio:
             raise FileNotFoundError(f"La gita {gid} non esiste")
         return json.loads(dati)
 
-    def elenco(self, archiviate: bool = False) -> list[dict]:
+    def elenco(self, archiviate: bool = False, bozze: bool = False) -> list[dict]:
+        """Gite attive (predefinito), archiviate, oppure bozze: i progetti in corso, mai visibili agli operatori."""
         out = [json.loads(self.d.leggi(p)) for p in self.d.elenca_meta()]
-        out = [m for m in out if bool(m.get("archiviata")) == archiviate]
+        out = [m for m in out if bool(m.get("archiviata")) == archiviate and (m.get("stato") == "bozza") == bozze]
         return sorted(out, key=lambda m: m["nome"].lower())
 
     def punti(self, gid: str, n: int | None = None) -> list[Punto]:
@@ -406,7 +407,8 @@ class Archivio:
         return v
 
     def crea(self, nome: str, punti: list[Punto], autore: str, nota: str, nonce: str | None = None,
-             cantiere: str | None = None, mezzo: str | None = None, waypoint: list[dict] | None = None) -> str:
+             cantiere: str | None = None, mezzo: str | None = None, waypoint: list[dict] | None = None,
+             stato: str | None = None) -> str:
         punti, _ = pulisci(punti)
         if len(punti) < 2:
             raise ValueError("Una gita deve avere almeno due punti")
@@ -415,6 +417,8 @@ class Archivio:
             gid = f"{_slug(nome)}-{uuid.uuid4().hex[:6]}"
             m = {"id": gid, "nome": nome.strip() or "Gita senza nome", "creata": _adesso(), "creata_da": autore,
                  "archiviata": False, "cantiere": cantiere, "mezzo": mezzo, "versioni": []}
+            if stato:
+                m["stato"] = stato
             self._nuova_versione(m, punti, autore, nota, nonce, waypoint)
         return gid
 
@@ -466,6 +470,18 @@ class Archivio:
             self.d.scrivi({f"{self._cartella(gid)}/meta.json": json.dumps(m, ensure_ascii=False, indent=2)},
                           f"{m['nome']}: assegnazione aggiornata", autore)
             return True
+
+    def concludi(self, gid: str, autore: str) -> None:
+        """Una bozza diventa una gita normale del cantiere, pronta per essere pubblicata."""
+        with self.d.lock:
+            self.d.aggiorna(forza=True)
+            m = self.meta(gid)
+            if m.get("stato") != "bozza":
+                return
+            m.pop("stato")
+            m.setdefault("eventi", []).append({"data": _adesso(), "autore": autore, "azione": "conclusa (era una bozza)"})
+            self.d.scrivi({f"{self._cartella(gid)}/meta.json": json.dumps(m, ensure_ascii=False, indent=2)},
+                          f"{m['nome']}: conclusa", autore)
 
     def pubblica(self, gid: str, n: int, autore: str) -> None:
         """Approva la versione n per la strada: è quella che vedranno gli operatori."""
