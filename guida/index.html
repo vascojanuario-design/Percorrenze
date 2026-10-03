@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guida gita</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--verde:#009640;--verde2:#007A34;--ink:#16301F;--ink2:#5B6B62;--arancio:#E8590C;--linea:#3E6FB0;--f:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:var(--f);color:var(--ink);background:#E9EEEA;overflow:hidden;-webkit-tap-highlight-color:transparent}
+#app{position:relative;height:100%}
+#map{position:absolute;inset:0}
+button{font:600 15px var(--f);border:1px solid #C9D3CD;background:#fff;color:var(--ink);border-radius:10px;padding:10px 14px;cursor:pointer}
+button.primario{background:var(--verde);border-color:var(--verde);color:#fff}
+button:disabled{opacity:.45}
+[hidden]{display:none!important}
+#istr{position:absolute;top:10px;left:10px;right:10px;z-index:900;background:var(--ink);color:#fff;border-radius:14px;padding:10px 14px;display:flex;align-items:center;gap:12px;box-shadow:0 3px 12px rgba(0,0,0,.3)}
+#freccia{width:46px;height:46px;flex:none}
+#istr b{display:block;font-size:22px;line-height:1.1}
+#istr span{font-size:15px;opacity:.85}
+#tipo{margin-left:auto;font-size:12px;font-weight:700;background:#46535A;border-radius:6px;padding:3px 7px;white-space:nowrap}
+#gps{position:absolute;top:84px;right:10px;z-index:900;background:#fff;border-radius:16px;padding:4px 10px;font-size:13px;font-weight:600;box-shadow:0 1px 5px rgba(0,0,0,.25)}
+#gps.ko{background:#FDE2E1;color:#9B1C1C}
+#fuori{position:absolute;top:84px;left:10px;right:110px;z-index:900;background:#C92A2A;color:#fff;border-radius:12px;padding:10px 12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+#nota{position:absolute;left:10px;right:10px;bottom:132px;z-index:900;background:#fff;border-radius:14px;padding:12px 14px;display:flex;gap:12px;align-items:center;box-shadow:0 3px 14px rgba(0,0,0,.3);border-left:8px solid var(--verde)}
+#nota .ic{width:34px;height:34px;border-radius:8px 8px 8px 0;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none}
+#nota b{display:block;font-size:17px}
+#nota small{color:var(--ink2)}
+#barra{position:absolute;left:0;right:0;bottom:0;z-index:900;background:#fff;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));box-shadow:0 -2px 10px rgba(0,0,0,.15)}
+#prog{height:10px;border-radius:5px;background:#E3E9E5;overflow:hidden}
+#prog i{display:block;height:100%;width:0;background:var(--verde);transition:width .4s}
+#proglbl{display:flex;justify-content:space-between;font-size:14px;margin:6px 0 8px;color:var(--ink2)}
+#proglbl b{color:var(--ink);font-size:16px}
+#comandi{display:flex;gap:8px}
+#comandi button{flex:1;padding:10px 6px;font-size:14px}
+#comandi button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.schermo{position:absolute;inset:0;z-index:1000;background:rgba(22,48,31,.55);display:flex;align-items:flex-end;justify-content:center;padding:14px}
+.scheda{background:#fff;border-radius:18px;padding:20px;width:100%;max-width:480px;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.scheda h1{font-size:23px;margin:0 0 4px}
+.scheda p{margin:6px 0;color:var(--ink2);font-size:15px}
+.scheda .bottoni{display:grid;gap:8px;margin-top:14px}
+.scheda .bottoni button{padding:14px;font-size:17px}
+.dati{display:flex;gap:10px;margin:12px 0}
+.dati div{flex:1;background:#F1F6F2;border-radius:10px;padding:8px 10px}
+.dati b{display:block;font-size:20px}
+.dati span{font-size:13px;color:var(--ink2)}
+.pos{background:#1E6FD9;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px rgba(30,111,217,.35),0 1px 4px rgba(0,0,0,.4)}
+.wp span{display:flex;width:100%;height:100%;align-items:center;justify-content:center;border-radius:7px 7px 7px 0;border:2px solid #fff;color:#fff;font:700 12px var(--f);box-shadow:0 1px 4px rgba(0,0,0,.4)}
+.se{display:flex;align-items:center;justify-content:center;font:700 11px var(--f);color:#fff;background:var(--ink);border:2px solid #fff;border-radius:50%}
+.leaflet-container{font-family:var(--f)}
+.leaflet-top.leaflet-right{top:112px}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+  <div id="istr" hidden>
+    <svg id="freccia" viewBox="0 0 48 48"><g id="frecciag" transform="rotate(0 24 24)"><path d="M24 6 L36 22 H28 V42 H20 V22 H12 Z" fill="#fff"/></g></svg>
+    <div><b id="istr1">Prosegui</b><span id="istr2"></span></div>
+    <div id="tipo" hidden>Trasferimento</div>
+  </div>
+  <div id="gps" hidden>GPS…</div>
+  <div id="fuori" hidden></div>
+  <div id="nota" hidden><div class="ic" id="notaic"></div><div><b id="notat"></b><small id="notad"></small></div></div>
+  <div id="barra" hidden>
+    <div id="prog"><i></i></div>
+    <div id="proglbl"><span><b id="perc">0%</b> percorso</span><span id="km"></span></div>
+    <div id="comandi">
+      <button id="centra" class="on">Centra</button>
+      <button id="voce" class="on">Voce</button>
+      <button id="termina">Termina</button>
+    </div>
+  </div>
+  <div class="schermo" id="inizio" hidden>
+    <div class="scheda">
+      <h1 id="titolo"></h1>
+      <div class="dati"><div><b id="dkm"></b><span>lunghezza</span></div><div><b id="dwp"></b><span>punti d'interesse</span></div></div>
+      <p id="ripresa" hidden></p>
+      <p>Metti il telefono sul supporto: lo schermo resterà acceso durante il giro. Il telefono ti chiederà il permesso di usare la posizione.</p>
+      <div class="bottoni">
+        <button class="primario" id="via">Avvia la navigazione</button>
+        <button id="ricomincia" hidden>Ricomincia da capo</button>
+        <button id="prova">Prova senza GPS (ripasso del giro)</button>
+      </div>
+    </div>
+  </div>
+  <div class="schermo" id="fine" hidden>
+    <div class="scheda">
+      <h1>Giro terminato</h1>
+      <div class="dati"><div><b id="fperc"></b><span>percorso</span></div><div><b id="fsalt"></b><span>non percorso</span></div></div>
+      <p id="fmsg"></p>
+      <div class="bottoni">
+        <button id="mostra">Mostra i tratti non percorsi</button>
+        <button class="primario" id="chiudi">Torna alle gite</button>
+        <button id="continua">Continua la navigazione</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+/* Guida lungo la gita, tutta sul telefono: la posizione non viene inviata a nessuno. */
+const $=s=>document.querySelector(s);
+const TIPI={cassonetto:{l:'Cassonetti / raccolta',s:'C',c:'#2F6B4F'},utenza:{l:'Utenza critica',s:'U',c:'#1F5FA8'},
+  attenzione:{l:'Attenzione',s:'!',c:'#C92A2A'},accesso:{l:'Accesso',s:'A',c:'#7A4FA0'},nota:{l:'Nota',s:'N',c:'#5F6B73'}};
+let G=null,P=[],C=[],TOT=0,fatto=null,pos=0,ultimaPos=null,watch=null,sim=null,segui=true,voceOn=true,avviata=false;
+let simulata=false,fuoriN=0,saltoN=0,saltoPos=null,ultimaFrase='',viste=new Set(),wake=null,chiave='';
+const hv=(a,b)=>{const r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lon-a.lon)*r;const x=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dn/2)**2;return 2*6371000*Math.asin(Math.sqrt(x));};
+const fmtKm=m=>(m/1000).toLocaleString('it-IT',{minimumFractionDigits:1,maximumFractionDigits:1})+' km';
+const fmtM=m=>m<1000?Math.round(m/10)*10+' m':fmtKm(m);
+const rotta=(a,b)=>{const r=Math.PI/180,y=Math.sin((b.lon-a.lon)*r)*Math.cos(b.lat*r),x=Math.cos(a.lat*r)*Math.sin(b.lat*r)-Math.sin(a.lat*r)*Math.cos(b.lat*r)*Math.cos((b.lon-a.lon)*r);return (Math.atan2(y,x)/r+360)%360;};
+
+/* ---------- mappa ---------- */
+const map=L.map('map',{zoomControl:false,maxZoom:20,attributionControl:true}).setView([43.81,11.14],15);
+const RP='strict-origin-when-cross-origin',E='https://server.arcgisonline.com/ArcGIS/rest/services/';
+const esri=s=>L.tileLayer(E+s+'/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,referrerPolicy:RP,attribution:'&copy; Esri'});
+const sfondi={'Stradale':esri('World_Street_Map'),'Satellite con vie':L.layerGroup([esri('World_Imagery'),esri('Reference/World_Transportation'),esri('Reference/World_Boundaries_and_Places')])};
+sfondi['Stradale'].addTo(map);L.control.layers(sfondi,null,{position:'topright'}).addTo(map);
+map.createPane('base').style.zIndex=410;map.createPane('fatti').style.zIndex=420;map.createPane('avanti').style.zIndex=430;
+const lBase=L.layerGroup().addTo(map),lFatti=L.layerGroup().addTo(map),lAvanti=L.layerGroup().addTo(map),lWp=L.layerGroup().addTo(map),lMancanti=L.layerGroup().addTo(map);
+let marcatore=null;
+map.on('dragstart',()=>{if(avviata){segui=false;$('#centra').classList.remove('on');}});
+
+function disegnaBase(){
+  lBase.clearLayers();lWp.clearLayers();
+  const ll=P.map(p=>[p.lat,p.lon]);
+  L.polyline(ll,{pane:'base',color:'#fff',weight:11,opacity:.9,interactive:false}).addTo(lBase);
+  L.polyline(ll,{pane:'base',color:'#3E6FB0',weight:6,opacity:.75,interactive:false}).addTo(lBase);
+  const ic=t=>L.divIcon({className:'se',html:t,iconSize:[22,22]});
+  L.marker(ll[0],{icon:ic('P'),interactive:false}).addTo(lBase);L.marker(ll[ll.length-1],{icon:ic('A'),interactive:false}).addTo(lBase);
+  for(const w of G.wp){const t=TIPI[w.tipo]||TIPI.nota;
+    L.marker([w.lat,w.lon],{icon:L.divIcon({className:'wp',html:`<span style="background:${t.c}">${t.s}</span>`,iconSize:[26,26],iconAnchor:[2,26]}),title:w.testo||t.l}).addTo(lWp);}
+}
+function disegnaFatti(){
+  lFatti.clearLayers();let run=null;
+  const chiudi=()=>{if(run&&run.length>1)L.polyline(run,{pane:'fatti',color:'#009640',weight:8,opacity:.95,interactive:false}).addTo(lFatti);run=null;};
+  for(let i=0;i<P.length-1;i++){
+    if(fatto[i]){if(!run)run=[[P[i].lat,P[i].lon]];run.push([P[i+1].lat,P[i+1].lon]);}else chiudi();
+  }
+  chiudi();
+}
+function puntoA(m){
+  let i=0;while(i<P.length-2&&C[i+1]<m)i++;
+  const f=C[i+1]>C[i]?Math.min(1,Math.max(0,(m-C[i])/(C[i+1]-C[i]))):0;
+  return {lat:P[i].lat+(P[i+1].lat-P[i].lat)*f,lon:P[i].lon+(P[i+1].lon-P[i].lon)*f,i};
+}
+function disegnaAvanti(){
+  lAvanti.clearLayers();
+  const a=puntoA(pos),ll=[[a.lat,a.lon]];let j=a.i+1;
+  while(j<P.length&&C[j]<=pos+300){ll.push([P[j].lat,P[j].lon]);j++;}
+  if(j<P.length){const b=puntoA(Math.min(TOT,pos+300));ll.push([b.lat,b.lon]);}
+  if(ll.length>1)L.polyline(ll,{pane:'avanti',color:'#E8590C',weight:9,opacity:.95,interactive:false}).addTo(lAvanti);
+}
+
+/* ---------- avanzamento lungo la sequenza ---------- */
+function proietta(q,i){
+  const k=Math.cos(q.lat*Math.PI/180)*111320,a=P[i],b=P[i+1];
+  const ax=(a.lon-q.lon)*k,ay=(a.lat-q.lat)*110540,bx=(b.lon-q.lon)*k,by=(b.lat-q.lat)*110540;
+  const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;let t=l2?-(ax*dx+ay*dy)/l2:0;t=Math.max(0,Math.min(1,t));
+  return {d:Math.hypot(ax+t*dx,ay+t*dy),m:C[i]+t*(C[i+1]-C[i]),i};
+}
+function migliore(q,da,a){
+  /* Nei ripassi la stessa strada compare più volte: tra i tratti ugualmente vicini
+     si sceglie il primo non ancora superato, così la guida va sempre avanti nella sequenza. */
+  const cand=[];
+  for(let i=0;i<P.length-1;i++){if(C[i+1]<da||C[i]>a)continue;cand.push(proietta(q,i));}
+  if(!cand.length)return null;
+  const dmin=Math.min(...cand.map(c=>c.d)),vicini=cand.filter(c=>c.d<=dmin+4);
+  const avanti=vicini.filter(c=>c.m>=pos-15);
+  const scelta=(avanti.length?avanti:vicini).reduce((x,y)=>y.m<x.m?y:x);
+  return scelta;
+}
+function segnaFatto(da,a){
+  for(let i=0;i<P.length-1;i++){if(C[i+1]<=da||C[i]>=a)continue;
+    const inizio=Math.max(C[i],da),fine=Math.min(C[i+1],a),len=C[i+1]-C[i];
+    if(len<=0||(fine-inizio)/len>.5||fine>=C[i+1]-1)fatto[i]=1;}
+}
+function nuovaPosizione(q,prec){
+  if(prec>50){mostraGps(prec);return;}
+  ultimaPos=q;if(!simulata)mostraGps(prec);
+  const vicino=migliore(q,pos-60,pos+450);
+  if(vicino&&vicino.d<=35){
+    fuoriN=0;saltoN=0;$('#fuori').hidden=true;
+    if(vicino.m>pos){segnaFatto(pos,vicino.m);pos=vicino.m;}
+  }else{
+    const avanti=migliore(q,pos+450,TOT);
+    if(avanti&&avanti.d<=25){
+      saltoN=(saltoPos!==null&&Math.abs(avanti.m-saltoPos)<200)?saltoN+1:1;saltoPos=avanti.m;
+      if(saltoN>=3){pos=avanti.m;saltoN=0;$('#fuori').hidden=true;parla('Hai saltato un tratto della gita',true);}
+    }else{
+      fuoriN++;
+      if(fuoriN>=2){const t=puntoA(pos);$('#fuori').hidden=false;
+        $('#fuori').textContent='Sei fuori percorso: torna sulla linea arancione ('+fmtM(hv(q,t))+')';
+        if(fuoriN===2)parla('Sei fuori percorso',true);}
+    }
+  }
+  aggiorna();
+}
+function aggiorna(){
+  disegnaFatti();disegnaAvanti();
+  const q=ultimaPos||puntoA(pos);
+  if(!marcatore)marcatore=L.marker([q.lat,q.lon],{icon:L.divIcon({className:'pos',iconSize:[22,22]}),interactive:false,zIndexOffset:3000}).addTo(map);
+  else marcatore.setLatLng([q.lat,q.lon]);
+  if(segui)map.setView([q.lat,q.lon],Math.max(map.getZoom(),17),{animate:false});
+  let lf=0;for(let i=0;i<P.length-1;i++)if(fatto[i])lf+=C[i+1]-C[i];
+  const pc=TOT?Math.min(100,Math.round(lf/TOT*100)):0;
+  $('#prog i').style.width=pc+'%';$('#perc').textContent=pc+'%';$('#km').textContent=fmtKm(lf)+' di '+fmtKm(TOT);
+  istruzione();notaVicina();salva();
+  if(pos>=TOT-15&&!$('#fine').dataset.mostrata){$('#fine').dataset.mostrata='1';fine();}
+}
+
+/* ---------- indicazioni ---------- */
+function istruzione(){
+  const a=puntoA(pos);let svolta=null;
+  for(let k=a.i+1;k<P.length-1&&C[k]-pos<=350;k++){
+    let p0=k-1;while(p0>0&&C[k]-C[p0]<8)p0--;let p2=k+1;while(p2<P.length-1&&C[p2]-C[k]<8)p2++;
+    let d=rotta(P[k],P[p2])-rotta(P[p0],P[k]);d=((d+540)%360)-180;
+    if(Math.abs(d)>=35){svolta={k,d,dist:C[k]-pos};break;}
+  }
+  const tipo=P[a.i]&&P[a.i].t==='t';$('#tipo').hidden=!tipo;
+  let t1,t2,ang=0;
+  if(pos>=TOT-15){t1='Arrivo';t2='Fine della gita';}
+  else if(!svolta){t1='Prosegui dritto';t2='per '+fmtM(Math.min(350,TOT-pos));}
+  else{
+    const u=Math.abs(svolta.d)>=150;ang=u?180:svolta.d;
+    t1=u?'Inversione a U':svolta.d>0?(svolta.d>110?'Svolta stretta a destra':'Gira a destra'):(svolta.d<-110?'Svolta stretta a sinistra':'Gira a sinistra');
+    t2='tra '+fmtM(svolta.dist);
+    if(svolta.dist<=90){const frase=t1+' '+t2;const kk='s'+svolta.k;if(ultimaFrase!==kk){ultimaFrase=kk;parla(frase.replace(' m',' metri'));}}
+  }
+  $('#istr1').textContent=t1;$('#istr2').textContent=t2;
+  $('#frecciag').setAttribute('transform','rotate('+Math.round(ang)+' 24 24)');
+}
+function notaVicina(){
+  let mostra=null;
+  for(const w of G.wp){const dist=w.at-pos;if(dist>=-20&&dist<=120){mostra=w;break;}}
+  if(!mostra){$('#nota').hidden=true;return;}
+  const t=TIPI[mostra.tipo]||TIPI.nota;
+  $('#nota').hidden=false;$('#nota').style.borderLeftColor=t.c;$('#notaic').style.background=t.c;$('#notaic').textContent=t.s;
+  $('#notat').textContent=mostra.testo||t.l;$('#notad').textContent=t.l+(mostra.at-pos>5?', tra '+fmtM(mostra.at-pos):', qui');
+  if(!viste.has(mostra.id)){viste.add(mostra.id);try{navigator.vibrate&&navigator.vibrate([150,80,150]);}catch(e){}parla(t.l+': '+(mostra.testo||''),true);}
+}
+function parla(testo,subito){
+  if(!voceOn||!('speechSynthesis' in window))return;
+  try{if(subito)speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(testo);u.lang='it-IT';u.rate=1.05;speechSynthesis.speak(u);}catch(e){}
+}
+function mostraGps(prec){
+  const g=$('#gps');g.hidden=false;
+  if(prec==null){g.textContent='GPS non disponibile';g.classList.add('ko');return;}
+  g.classList.toggle('ko',prec>50);g.textContent=prec>50?'GPS impreciso ('+Math.round(prec)+' m)':'GPS ok, '+Math.round(prec)+' m';
+}
+
+/* ---------- avvio, simulazione, fine ---------- */
+async function schermoAcceso(){try{if('wakeLock' in navigator)wake=await navigator.wakeLock.request('screen');}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&avviata)schermoAcceso();});
+function avvia(prova){
+  simulata=prova;$('#inizio').hidden=true;$('#istr').hidden=false;$('#barra').hidden=false;avviata=true;segui=true;
+  schermoAcceso();parla(simulata?'Ripasso della gita '+G.name:'Navigazione avviata. '+G.name,true);
+  if(simulata){
+    $('#gps').hidden=false;$('#gps').textContent='Prova senza GPS';$('#gps').classList.remove('ko');
+    let m=pos;sim=setInterval(()=>{m=Math.min(TOT,m+12);const q=puntoA(m);nuovaPosizione({lat:q.lat,lon:q.lon},5);if(m>=TOT){clearInterval(sim);sim=null;}},250);
+    return;
+  }
+  if(!('geolocation' in navigator)){mostraGps(null);return;}
+  watch=navigator.geolocation.watchPosition(p=>nuovaPosizione({lat:p.coords.latitude,lon:p.coords.longitude},p.coords.accuracy),
+    err=>{const g=$('#gps');g.hidden=false;g.classList.add('ko');g.textContent=err.code===1?'Posizione non consentita: abilitala nelle impostazioni':'GPS non disponibile';},
+    {enableHighAccuracy:true,maximumAge:2000,timeout:20000});
+}
+function ferma(){if(watch!==null){navigator.geolocation.clearWatch(watch);watch=null;}if(sim){clearInterval(sim);sim=null;}try{wake&&wake.release();}catch(e){}wake=null;}
+function fine(){
+  let lf=0,ls=0;const mancanti=[];
+  for(let i=0;i<P.length-1;i++){const l=C[i+1]-C[i];if(fatto[i])lf+=l;else{ls+=l;mancanti.push(i);}}
+  $('#fperc').textContent=Math.round(lf/TOT*100)+'%';$('#fsalt').textContent=fmtKm(ls);
+  $('#fmsg').textContent=ls<TOT*.02?'Hai percorso tutta la gita.':'Puoi vedere sulla mappa, in rosso, i tratti che risultano non percorsi.';
+  $('#mostra').hidden=ls<TOT*.02;$('#fine').hidden=false;
+  lMancanti.clearLayers();let run=null;
+  const chiudi=()=>{if(run&&run.length>1)L.polyline(run,{color:'#C92A2A',weight:7,opacity:.9,dashArray:'2 8',interactive:false}).addTo(lMancanti);run=null;};
+  for(let i=0;i<P.length-1;i++){if(!fatto[i]){if(!run)run=[[P[i].lat,P[i].lon]];run.push([P[i+1].lat,P[i+1].lon]);}else chiudi();}chiudi();
+}
+function salva(){try{localStorage.setItem(chiave,JSON.stringify({pos,f:Array.from(fatto).join(''),t:Date.now()}));}catch(e){}}
+function invia(v){window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:setComponentValue',value:v,dataType:'json'},'*');}
+
+$('#via').onclick=()=>avvia(false);
+$('#prova').onclick=()=>avvia(true);
+$('#ricomincia').onclick=()=>{fatto=new Uint8Array(P.length-1);pos=0;salva();avvia(false);};
+$('#centra').onclick=()=>{segui=true;$('#centra').classList.add('on');aggiorna();};
+$('#voce').onclick=()=>{voceOn=!voceOn;$('#voce').classList.toggle('on',voceOn);$('#voce').textContent=voceOn?'Voce':'Voce spenta';if(!voceOn)try{speechSynthesis.cancel();}catch(e){}};
+$('#termina').onclick=()=>{ferma();fine();};
+$('#continua').onclick=()=>{$('#fine').hidden=true;lMancanti.clearLayers();if(!watch&&!sim)avvia(false);};
+$('#mostra').onclick=()=>{$('#fine').hidden=true;segui=false;$('#centra').classList.remove('on');const b=lMancanti.getLayers();if(b.length)map.fitBounds(L.featureGroup(b).getBounds(),{padding:[40,40]});};
+$('#chiudi').onclick=()=>{ferma();invia({azione:'chiudi',nonce:Date.now()+''});};
+
+/* ---------- collegamento con Streamlit ---------- */
+let altezza=700;
+function setH(h){window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:setFrameHeight',height:h},'*');}
+function misura(){let h=700;try{h=Math.max(480,window.parent.innerHeight-70);}catch(e){}if(h!==altezza){altezza=h;document.body.style.height=h+'px';setH(h);setTimeout(()=>map.invalidateSize(),60);}}
+try{window.parent.addEventListener('resize',misura);}catch(e){}
+window.addEventListener('message',e=>{
+  const d=e.data;if(!d||d.type!=='streamlit:render')return;
+  misura();setH(altezza);
+  const g=(d.args||{}).gita;if(!g||(G&&G.id===g.id&&G.version===g.version))return;
+  G={...g};P=g.pts.map(([lat,lon,t])=>({lat,lon,t:t||'r'}));C=[0];for(let i=1;i<P.length;i++)C.push(C[i-1]+hv(P[i-1],P[i]));TOT=C[C.length-1];
+  G.wp=(g.wpts||[]).map((w,i)=>{let bi=0,bd=Infinity;P.forEach((p,k)=>{const dd=hv(w,p);if(dd<bd){bd=dd;bi=k;}});return {...w,id:'w'+i,at:C[bi]};}).sort((a,b)=>a.at-b.at);
+  fatto=new Uint8Array(Math.max(0,P.length-1));pos=0;
+  chiave='guida-'+g.id+'-v'+g.version+'-'+new Date().toISOString().slice(0,10);
+  try{const s=JSON.parse(localStorage.getItem(chiave)||'null');
+    if(s&&s.f&&s.f.length===fatto.length){for(let i=0;i<fatto.length;i++)fatto[i]=s.f[i]==='1'?1:0;pos=s.pos||0;
+      let lf=0;for(let i=0;i<fatto.length;i++)if(fatto[i])lf+=C[i+1]-C[i];
+      $('#ripresa').hidden=false;$('#ripresa').textContent='Oggi hai già percorso il '+Math.round(lf/TOT*100)+'% di questa gita: la navigazione riprende da dove eri.';$('#ricomincia').hidden=false;$('#via').textContent='Riprendi la navigazione';}}catch(e){}
+  $('#titolo').textContent=g.name;$('#dkm').textContent=fmtKm(TOT);$('#dwp').textContent=G.wp.length;
+  disegnaBase();disegnaFatti();map.fitBounds(L.latLngBounds(P.map(p=>[p.lat,p.lon])),{padding:[30,30]});
+  $('#inizio').hidden=false;
+});
+document.body.style.height=altezza+'px';
+window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:componentReady',apiVersion:1},'*');
+</script>
+</body>
+</html>
