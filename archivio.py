@@ -265,6 +265,7 @@ class DepositoGitHub:
         self._albero: dict[str, str] = {}      # percorso -> sha del file
         self._contenuti: dict[str, bytes] = {}  # sha -> contenuto
         self._controllato = 0.0
+        self.scadenza_token: str | None = None
         self.aggiorna(forza=True)
 
     def _chiama(self, metodo: str, url: str, **kw):
@@ -272,6 +273,7 @@ class DepositoGitHub:
             r = self.http.request(metodo, self.api + url, timeout=30, **kw)
         except Exception as e:
             raise ErroreArchivio(f"GitHub non raggiungibile: {e}") from None
+        self.scadenza_token = r.headers.get("github-authentication-token-expiration") or self.scadenza_token
         if r.status_code >= 400:
             try:
                 msg = r.json().get("message", r.text)
@@ -529,6 +531,23 @@ class Archivio:
             cartella = self._cartella(gid)
             paths = [f"{cartella}/meta.json"] + [f"{cartella}/{v['file']}" for v in m["versioni"]]
             self.d.cancella(paths, f"{m['nome']}: eliminata definitivamente", autore)
+
+    def rinomina(self, gid: str, nome: str, autore: str) -> None:
+        """Cambia il nome della gita senza creare una nuova versione del percorso."""
+        nome = (nome or "").strip()
+        if not nome:
+            raise ValueError("Il nome non può essere vuoto")
+        with self.d.lock:
+            self.d.aggiorna(forza=True)
+            m = self.meta(gid)
+            if m["nome"] == nome:
+                return
+            vecchio = m["nome"]
+            m["nome"] = nome
+            m.setdefault("eventi", []).append({"data": _adesso(), "autore": autore,
+                                              "azione": f"rinominata (prima: {vecchio})"})
+            self.d.scrivi({f"{self._cartella(gid)}/meta.json": json.dumps(m, ensure_ascii=False, indent=2)},
+                          f"{vecchio}: rinominata in {nome}", autore)
 
     def sblocca(self, gid: str, autore: str) -> None:
         """Gli operatori torneranno a vedere sempre l'ultima versione."""

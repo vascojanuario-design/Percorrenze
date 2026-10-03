@@ -27,9 +27,21 @@ Gli altri utenti si creano dalla scheda **Utenti**. Ognuno può cambiare la prop
 
 Ogni gita appartiene a un cantiere e a un mezzo; un mezzo può avere più gite (gita 1, 2, 3…), ognuna con turno e giorni. Si gestisce tutto dalla scheda **Flotta**, scegliendo il cantiere nella barra laterale. Le gite importate senza cantiere compaiono all'amministratore sotto "Senza cantiere", da dove si assegnano.
 
-## Archivio gite
+## Struttura del portale
 
-Nella scheda **Archivio gite** si sceglie il cantiere e si vedono tutte le gite con il loro stato: attiva (eventualmente con la versione fissata per gli operatori), progetto in corso, nel cestino. Si selezionano con la casella a sinistra e si può: spostarle nel cestino, ripristinarle, scaricarne i GPX in uno zip. L'**eliminazione definitiva** (della gita e di tutte le sue versioni) è riservata all'amministratore e vale solo per le gite già nel cestino.
+Il cantiere si sceglie una volta sola nella barra laterale e vale per tutte le pagine. Il menu ha tre sezioni:
+
+- **Home**: numeri del cantiere (gite, chilometri, progetti, segnalazioni da verificare), avvisi (archivio non permanente, token in scadenza, rimessa mancante), pulsanti rapidi, anteprime delle gite e attività recente.
+- **Gite**: Elenco gite, Editor, Nuove gite, Percorrenze.
+- **Organizzazione**: Cantieri e mezzi, Utenti (solo amministratore), Impostazioni.
+
+Ogni pagina ha un suo indirizzo (per esempio `/gite`, `/editor`), che si può salvare nei preferiti.
+
+## Elenco gite
+
+Nella pagina **Elenco gite** si cercano le gite per nome, si filtrano per stato (attive, progetti in corso, cestino) e si caricano nuovi GPX. Selezionando una gita si apre la sua **scheda**: anteprima, dati, e i pulsanti **Modifica** (apre l'editor, o l'area di progettazione per un progetto, con la gita già selezionata), **Rinomina**, **Naviga**, **GPX**, **Cestino** / **Ripristina**; sotto, le **versioni** (scarica, ripristina, fissa per gli operatori) e l'**attività**. Selezionando più gite si agisce su tutte insieme.
+
+Si vedono tutte le gite con il loro stato: attiva (eventualmente con la versione fissata per gli operatori), progetto in corso, nel cestino. Si selezionano con la casella a sinistra e si può: spostarle nel cestino, ripristinarle, scaricarne i GPX in uno zip. L'**eliminazione definitiva** (della gita e di tutte le sue versioni) è riservata all'amministratore e vale solo per le gite già nel cestino.
 
 ## Creare gite senza GPX (scheda "Nuove gite")
 

@@ -238,7 +238,7 @@ body:not(.modo-crea) #altre>summary{display:none}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-let DATA = [], DATA_VERSION = null, USER = '', HEIGHT = 820, lastMsg = null, booted = false;
+let ultimaSelezione = null, DATA = [], DATA_VERSION = null, USER = '', HEIGHT = 820, lastMsg = null, booted = false;
 const justSent = new Map(), DK = 'percorsi-bozza-', IK = 'percorsi-chiuse-';
 const PAL = ['#2F6B4F','#1F5FA8','#B4432F','#7A4FA0','#B07D10','#0F7C86','#8A5A3C','#C2417A','#4E6B1F','#3E4FA8'];
 const RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -769,12 +769,14 @@ window.addEventListener('message',e=>{
   if(a.data_version!==DATA_VERSION){
     DATA=a.data||[];DATA_VERSION=a.data_version;fromServer();renderAll();
     const first=!booted;booted=true;
-    setTimeout(()=>{map.invalidateSize();if(first)fitAll();else if(act)fitAct();},120);
+    setTimeout(()=>{map.invalidateSize();if(act)fitAct();else if(first)fitAll();},120);
   }
   if(newMsg){lastMsg=m.nonce;toast(m.text);
     if(m.local_id&&m.ok){const g=gite.find(x=>x.id===m.local_id&&!x.sid);if(g){const eraAttiva=act===g;groups[g.id]?.remove();delete groups[g.id];gite.splice(gite.indexOf(g),1);if(eraAttiva)act=null;renderAll();save();
       const nuova=m.gita_id&&gite.find(x=>x.sid===m.gita_id);if(nuova)activate(nuova,false);}}
   }
+  const sl=a.seleziona;
+  if(sl&&sl.n!==ultimaSelezione){const g=gite.find(x=>x.sid===sl.id);if(g){ultimaSelezione=sl.n;activate(g,true);}}
   $('#send').textContent='Invia';if(act)renderServer();
   setTimeout(()=>map.invalidateSize(),50);
 });

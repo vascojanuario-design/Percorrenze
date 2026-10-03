@@ -3,6 +3,8 @@
 Avvio:  streamlit run app.py
 Configurazione nei secrets (vedi README): [archivio] per dove salvare, [amministratore] per il primo accesso.
 """
+import base64
+import math
 import os
 import secrets as segreto
 import time
@@ -14,7 +16,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import anagrafica as an
-from archivio import Conflitto, ErroreArchivio, apri, leggi_gpx, leggi_waypoint, pulisci
+from archivio import Conflitto, ErroreArchivio, apri, distanza, leggi_gpx, leggi_waypoint, pulisci
 
 BASE = Path(__file__).parent
 DATA_DIR = Path(os.environ.get("PERCORSI_DATA_DIR", BASE / "dati"))
@@ -35,7 +37,7 @@ st.markdown("""<style>
 .stTabs [aria-selected="true"] p{color:var(--verde)!important;font-weight:600}
 [data-testid="stMetricValue"]{color:var(--verde)}
 .titolo-pagina{display:flex;flex-direction:column;margin:0 0 2px;line-height:1.25}
-.titolo-pagina b{font-size:1.45rem;white-space:nowrap}
+.titolo-pagina b{font-size:1.65rem;white-space:nowrap;letter-spacing:-.01em}
 .titolo-pagina span{opacity:.7;font-size:.9rem}
 </style>""", unsafe_allow_html=True)
 if LOGO.exists():
@@ -183,63 +185,35 @@ def puo_modificare(m: dict) -> bool:
 
 with st.sidebar:
     st.caption(chi["nome"] if chi["nome"].lower() == an.RUOLI[ruolo].lower() else f"{chi['nome']}, {an.RUOLI[ruolo].lower()}")
-
     opzioni = ([TUTTI] if amministratore else []) + miei_cantieri + ([SENZA] if amministratore else [])
     if not opzioni:
         st.info("Non hai ancora un cantiere assegnato. Chiedi all'amministratore di associarti a un cantiere.")
         cantiere_sel = None
     else:
         cantiere_sel = st.selectbox("Cantiere", opzioni, format_func=nome_cantiere, key="cantiere_sel")
-
     mezzo_sel = TUTTI
-    if cantiere_sel and cantiere_sel not in (TUTTI, SENZA) and ruolo != "operatore":
-        mezzi_opz = [TUTTI] + an.mezzi_del_cantiere(flotte, cantiere_sel) + [SENZA]
-        mezzo_sel = st.selectbox("Mezzo", mezzi_opz, key=f"mezzo_sel_{cantiere_sel}",
-                                 format_func=lambda m: "Tutti i mezzi" if m == TUTTI else an.etichetta_mezzo(flotte, m))
 
-    if ruolo != "operatore" and cantiere_sel:
+
+def barra_laterale_fondo():
+    with st.sidebar:
         st.divider()
-        st.subheader("Carica gite da GPX")
-        dest = cantiere_sel if cantiere_sel not in (TUTTI, SENZA) else None
-        st.caption(f"Le gite caricate andranno in: {nome_cantiere(dest)}"
-                   + (f", mezzo {an.etichetta_mezzo(flotte, mezzo_sel)}" if mezzo_sel not in (TUTTI, SENZA) else ""))
-        chiave_upload = f"upload_{st.session_state.get('upload_n', 0)}"
-        nuovi = st.file_uploader("File GPX", type=["gpx"], accept_multiple_files=True, key=chiave_upload,
-                                 label_visibility="collapsed")
-        if nuovi and st.button("Importa", type="primary", width="stretch"):
-            for f in nuovi:
-                try:
-                    nome, pts = leggi_gpx(f.getvalue(), f.name)
-                    pts, rimossi = pulisci(pts)
-                    archivio.crea(nome, pts, utente,
-                                  f"Importata da {f.name}" + (f", rimossi {rimossi} punti doppi" if rimossi else ""),
-                                  cantiere=dest, mezzo=mezzo_sel if mezzo_sel not in (TUTTI, SENZA) else None,
-                                  waypoint=leggi_waypoint(f.getvalue()))
-                    avviso(f"Importata: {nome}")
-                except (ValueError, ErroreArchivio) as e:
-                    avviso(str(e), ok=False)
-            st.session_state.upload_n = st.session_state.get("upload_n", 0) + 1
+        if not chi.get("da_secrets"):
+            with st.expander("Cambia password", icon=":material/key:"):
+                with st.form("cambio_pw", clear_on_submit=True):
+                    attuale = st.text_input("Password attuale", type="password")
+                    nuova = st.text_input("Nuova password", type="password", help="Almeno 8 caratteri")
+                    if st.form_submit_button("Cambia"):
+                        try:
+                            archivio.modifica_doc("utenti", an.UTENTI_VUOTO,
+                                                  lambda d: an.cambia_password(d, chi["utente"], attuale, nuova),
+                                                  f"{chi['utente']}: password cambiata", utente)
+                            st.success("Password cambiata.")
+                        except (ValueError, ErroreArchivio) as e:
+                            st.error(str(e))
+        if st.button("Esci", icon=":material/logout:", width="stretch"):
+            st.session_state.clear()
             st.rerun()
 
-    st.divider()
-    if not chi.get("da_secrets"):
-        with st.expander("Cambia password"):
-            with st.form("cambio_pw", clear_on_submit=True):
-                attuale = st.text_input("Password attuale", type="password")
-                nuova = st.text_input("Nuova password", type="password", help="Almeno 8 caratteri")
-                if st.form_submit_button("Cambia"):
-                    try:
-                        archivio.modifica_doc("utenti", an.UTENTI_VUOTO,
-                                              lambda d: an.cambia_password(d, chi["utente"], attuale, nuova),
-                                              f"{chi['utente']}: password cambiata", utente)
-                        st.success("Password cambiata.")
-                    except (ValueError, ErroreArchivio) as e:
-                        st.error(str(e))
-    if st.button("Esci", width="stretch"):
-        st.session_state.clear()
-        st.rerun()
-    if amministratore:
-        st.caption(f"Archivio: {archivio.descrizione}")
 
 for testo, ok in st.session_state.pop("avvisi", []):
     st.toast(testo, icon="✅" if ok else "⚠️")
@@ -250,7 +224,7 @@ if not cantiere_sel:
 
 # ================================================================ gite del cantiere scelto
 
-def nel_filtro(m: dict) -> bool:
+def nel_filtro(m: dict, mezzo: str = TUTTI) -> bool:
     c = m.get("cantiere")
     if cantiere_sel == TUTTI:
         ok = True
@@ -258,10 +232,10 @@ def nel_filtro(m: dict) -> bool:
         ok = c is None or c not in flotte["cantieri"]
     else:
         ok = c == cantiere_sel
-    if ok and mezzo_sel == SENZA:
+    if ok and mezzo == SENZA:
         ok = not m.get("mezzo") or m.get("mezzo") not in flotte["mezzi"]
-    elif ok and mezzo_sel != TUTTI:
-        ok = m.get("mezzo") == mezzo_sel
+    elif ok and mezzo != TUTTI:
+        ok = m.get("mezzo") == mezzo
     return ok
 
 
@@ -270,21 +244,9 @@ def ordine(m: dict):
     return (an._ordinabile(v.get("codice", "zzz")), m.get("numero") or 99, m["nome"].lower())
 
 
-attive = sorted([m for m in archivio.elenco() if nel_filtro(m)], key=ordine)
-
-
 @st.cache_data(show_spinner=False, max_entries=50)
 def contenuto_versione(gid: str, versione: int) -> tuple[list, list]:
     return archivio.contenuto(gid, versione)
-
-
-def scheda_editor():
-    impronta = archivio.impronta()
-    risposta = editor(data=dati_per_editor(attive), data_version=f"{impronta}|{cantiere_sel}|{mezzo_sel}", user=utente,
-                      msg=st.session_state.get("msg"), height=ALTEZZA_EDITOR, key="editor", default=None)
-
-    gestisci(risposta, cantiere_sel if cantiere_sel not in (TUTTI, SENZA) else None,
-             mezzo_sel if mezzo_sel not in (TUTTI, SENZA) else None)
 
 
 def gestisci(risposta, dest_cantiere: str | None, dest_mezzo: str | None) -> None:
@@ -366,7 +328,8 @@ def pagina_crea():
                              format_func=lambda k: "Da decidere" if not k else an.etichetta_mezzo(flotte, k))
     bozze = sorted([m for m in archivio.elenco(bozze=True) if m.get("cantiere") == cant], key=lambda m: m["nome"].lower())
     risposta = editor(data=dati_per_editor(bozze), data_version=f"{archivio.impronta()}|crea|{cant}", user=utente,
-                      msg=st.session_state.get("msg"), height=ALTEZZA_EDITOR, mode="crea", key="editor_crea", default=None)
+                      msg=st.session_state.get("msg"), height=ALTEZZA_EDITOR, mode="crea",
+                      seleziona=st.session_state.get("crea_seleziona"), key="editor_crea", default=None)
     gestisci(risposta, cant, mez)
 
 
@@ -381,74 +344,6 @@ def descrizione_gita(m: dict) -> str:
     if cantiere_sel == TUTTI:
         parti.insert(0, nome_cantiere(m.get("cantiere")))
     return ", ".join(parti)
-
-
-def scheda_storico():
-    mostra_archiviate = st.toggle("Mostra le gite archiviate")
-    gite = sorted([m for m in archivio.elenco(archiviate=mostra_archiviate) if nel_filtro(m)], key=ordine)
-    if not gite:
-        st.write("Nessuna gita archiviata qui." if mostra_archiviate else "Nessuna gita in questa selezione.")
-        return
-    st.download_button(f"Scarica le {len(gite)} gite di questa selezione (ZIP)", data=archivio.zip_ultime(gite),
-                       file_name=f"gite_{datetime.now():%Y%m%d}.zip", mime="application/zip")
-    m = st.selectbox("Gita", gite, format_func=lambda g: f"{g['nome']}  ({descrizione_gita(g)})")
-    ultima = m["versioni"][-1]
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Versione attuale", ultima["n"])
-    c2.metric("Totale", f"{ultima['km_tot']:.1f} km".replace(".", ","))
-    c3.metric("Raccolta", f"{ultima['km_raccolta']:.1f} km".replace(".", ","))
-    c4.metric("Trasferimento", f"{ultima['km_trasferimento']:.1f} km".replace(".", ","))
-    pub = m.get("pubblicata")
-    if pub:
-        st.warning(f"Gli operatori usano la versione {pub['n']}, fissata da {pub['autore']} il {data_breve(pub['data'])}."
-                   + (f" La versione {ultima['n']} non la vedono." if pub["n"] != ultima["n"] else ""))
-    else:
-        st.success(f"Gli operatori vedono sempre l'ultima versione (ora la {ultima['n']}).")
-    st.dataframe(
-        [{"Versione": v["n"], "Operatori": "✓" if v["n"] == versione_operatori(m) else "",
-          "Data": data_breve(v["data"]), "Autore": v["autore"], "Nota": v["nota"],
-          "Km": v["km_tot"], "Punti": v["punti"], "Note sulla mappa": v.get("note_mappa", 0)}
-         for v in reversed(m["versioni"])],
-        hide_index=True, width="stretch",
-    )
-    col_v, col_dl, col_rip, col_pub = st.columns(4, vertical_alignment="bottom")
-    n = col_v.selectbox("Versione", [v["n"] for v in reversed(m["versioni"])], key=f"ver_{m['id']}")
-    col_dl.download_button("Scarica GPX", data=archivio.gpx(m["id"], n),
-                           file_name=f"{m['nome']}_v{n}.gpx".replace(" ", "_"),
-                           mime="application/gpx+xml", width="stretch")
-    modificabile = puo_modificare(m)
-    try:
-        if mostra_archiviate:
-            if col_rip.button("Riattiva la gita", width="stretch", disabled=not modificabile):
-                archivio.archivia(m["id"], utente, archiviata=False)
-                avviso(f"Riattivata: {m['nome']}")
-                st.rerun()
-        elif col_rip.button("Ripristina questa versione", width="stretch",
-                            disabled=n == ultima["n"] or not modificabile):
-            nuova = archivio.ripristina(m["id"], n, utente)
-            avviso(f"La versione {n} è tornata attuale come versione {nuova}")
-            st.rerun()
-        if not mostra_archiviate and pub:
-            if col_pub.button("Usa sempre l'ultima versione", width="stretch", disabled=not modificabile,
-                              help="Gli operatori vedranno ogni nuova versione appena salvata"):
-                archivio.sblocca(m["id"], utente)
-                avviso(f"{m['nome']}: gli operatori vedono l'ultima versione")
-                st.rerun()
-        elif not mostra_archiviate and col_pub.button(f"Fissa la versione {n} per gli operatori", width="stretch",
-                                                      disabled=not modificabile,
-                                                      help="Utile se stai rifacendo la gita: gli operatori continuano "
-                                                           "a usare questa versione finché non la sblocchi"):
-            archivio.pubblica(m["id"], n, utente)
-            avviso(f"{m['nome']}: gli operatori usano la versione {n}")
-            st.rerun()
-    except (ErroreArchivio, ValueError) as e:
-        st.error(str(e))
-    if st.button(f"▶  Prova la navigazione (versione {n})", help="Apre la guida come la vedrà l'operatore. "
-                 "Con \"Prova senza GPS\" la gita scorre da sola."):
-        st.session_state.guida = (m["id"], n)
-        st.rerun()
-    for e in reversed(m.get("eventi", [])):
-        st.caption(f"{data_breve(e['data'])}: {e['azione']} da {e['autore']}")
 
 
 # ================================================================ flotta
@@ -473,6 +368,7 @@ def conta(gite: list[dict], campo: str) -> dict:
 
 
 def scheda_flotta():
+    intestazione("Cantieri e mezzi", "cantieri con la rimessa, mezzi e assegnazione delle gite")
     tutte = archivio.elenco() + archivio.elenco(archiviate=True) + archivio.elenco(bozze=True)
 
     if amministratore:
@@ -616,8 +512,7 @@ def scheda_nuove_gite():
     if not miei_cantieri:
         st.info("Non hai cantieri assegnati.")
         return
-    st.markdown("<div class='titolo-pagina'><b>Nuove gite</b><span>per creare gite senza GPX, disegnandole sulla mappa"
-                "</span></div>", unsafe_allow_html=True)
+    intestazione("Nuove gite", "per creare gite senza GPX, disegnandole sulla mappa")
     cant = st.selectbox("Cantiere", miei_cantieri, format_func=nome_cantiere, key="nuove_cantiere",
                         index=miei_cantieri.index(cantiere_sel) if cantiere_sel in miei_cantieri else 0)
     c1, c2 = st.columns([2, 1])
@@ -647,72 +542,444 @@ def scheda_nuove_gite():
                 st.rerun()
 
 
-def scheda_archivio():
-    opzioni = miei_cantieri + ([SENZA] if amministratore else [])
-    if not opzioni:
-        st.info("Non hai cantieri assegnati.")
-        return
-    st.markdown("<div class='titolo-pagina'><b>Archivio gite</b><span>tutti i file del cantiere: gite attive, "
-                "progetti in corso e cestino</span></div>", unsafe_allow_html=True)
-    c1, c2 = st.columns([1, 2])
-    cant = c1.selectbox("Cantiere", opzioni, format_func=nome_cantiere, key="arch_cantiere",
-                        index=opzioni.index(cantiere_sel) if cantiere_sel in opzioni else 0)
-    filtro = c2.segmented_control("Mostra", ["Tutte", "Attive", "Progetti in corso", "Nel cestino"],
-                                  default="Tutte", key="arch_filtro")
-    def del_cantiere(m):
-        return (m.get("cantiere") is None or m.get("cantiere") not in flotte["cantieri"]) if cant == SENZA \
-            else m.get("cantiere") == cant
-    tutte = [m for m in archivio.tutte() if del_cantiere(m)]
-    filtri = {"Progetti in corso": lambda m: stato_gita(m) == "Progetto in corso",
-              "Attive": lambda m: stato_gita(m).startswith("Attiva"),
+# ================================================================ elementi grafici comuni
+
+def intestazione(titolo: str, sottotitolo: str = "") -> None:
+    st.markdown(f"<div class='titolo-pagina'><b>{titolo}</b><span>{sottotitolo}</span></div>", unsafe_allow_html=True)
+
+
+@st.cache_data(show_spinner=False, max_entries=400)
+def svg_gita(gid: str, versione: int, larg: int = 160, alt: int = 100, spessore: float = 2.2) -> str:
+    """Piccolo disegno del percorso: raccolta in verde, trasferimento grigio tratteggiato."""
+    pts, wpts = contenuto_versione(gid, versione)
+    if len(pts) < 2:
+        return f"<svg xmlns='http://www.w3.org/2000/svg' width='{larg}' height='{alt}'></svg>"
+    passo = max(1, len(pts) // 400)
+    camp = pts[::passo] + [pts[-1]]
+    k = math.cos(math.radians(camp[0][0]))
+    xs = [p[1] * k for p in camp]; ys = [p[0] for p in camp]
+    minx, maxx, miny, maxy = min(xs), max(xs), min(ys), max(ys)
+    m = 6
+    sc = min((larg - 2 * m) / ((maxx - minx) or 1e-9), (alt - 2 * m) / ((maxy - miny) or 1e-9))
+    ox = (larg - (maxx - minx) * sc) / 2; oy = (alt - (maxy - miny) * sc) / 2
+    xy = [(ox + (x - minx) * sc, alt - (oy + (y - miny) * sc)) for x, y in zip(xs, ys)]
+    tratti, attuale, tipo = [], [xy[0]], camp[0][2]
+    for (x, y), p in zip(xy[1:], camp[1:]):
+        attuale.append((x, y))
+        if p[2] != tipo:
+            tratti.append((tipo, attuale)); attuale = [(x, y)]; tipo = p[2]
+    tratti.append((tipo, attuale))
+    linee = "".join(
+        f"<polyline points='{' '.join(f'{x:.1f},{y:.1f}' for x, y in t)}' fill='none' "
+        + (f"stroke='#8A9590' stroke-width='{spessore * .8}' stroke-dasharray='3 3'" if tp == "t"
+           else f"stroke='#009640' stroke-width='{spessore}'") + " stroke-linejoin='round' stroke-linecap='round'/>"
+        for tp, t in tratti if len(t) > 1)
+    (x0, y0), (x1, y1) = xy[0], xy[-1]
+    return (f"<svg xmlns='http://www.w3.org/2000/svg' width='{larg}' height='{alt}' viewBox='0 0 {larg} {alt}'>"
+            f"<rect width='{larg}' height='{alt}' rx='8' fill='#EEF5F0'/>{linee}"
+            f"<circle cx='{x0:.1f}' cy='{y0:.1f}' r='{spessore * 1.6}' fill='#16301F'/>"
+            f"<rect x='{x1 - spessore * 1.5:.1f}' y='{y1 - spessore * 1.5:.1f}' width='{spessore * 3}' height='{spessore * 3}' fill='#16301F'/></svg>")
+
+
+def svg_html(gid: str, versione: int, larg: int = 220, alt: int = 120, spessore: float = 2.2) -> str:
+    """Anteprima che si adatta alla larghezza del riquadro."""
+    svg = svg_gita(gid, versione, larg, alt, spessore)
+    return svg.replace(f"width='{larg}' height='{alt}' viewBox", "style='width:100%;height:auto;display:block' viewBox", 1)
+
+
+def svg_dati(gid: str, versione: int, larg: int = 160, alt: int = 100) -> str:
+    return "data:image/svg+xml;base64," + base64.b64encode(svg_gita(gid, versione, larg, alt).encode()).decode()
+
+
+@st.cache_data(show_spinner=False, max_entries=400)
+def n_segnalazioni(gid: str, versione: int) -> int:
+    """Come "Da verificare" nell'editor: segmenti oltre 250 m e brevi andata e ritorno sotto i 30 m."""
+    pts, _ = contenuto_versione(gid, versione)
+    n = 0
+    for a, b in zip(pts, pts[1:]):
+        if distanza(a, b) > 250:
+            n += 1
+    for a, b, c in zip(pts, pts[1:], pts[2:]):
+        d1, d2 = distanza(a, b), distanza(b, c)
+        if 3 <= d1 < 30 and 3 <= d2 < 30:
+            k = math.cos(math.radians(b[0]))
+            v1 = ((b[1] - a[1]) * k, b[0] - a[0]); v2 = ((c[1] - b[1]) * k, c[0] - b[0])
+            if (v1[0] * v2[0] + v1[1] * v2[1]) / (math.hypot(*v1) * math.hypot(*v2)) < -0.9:
+                n += 1
+    return n
+
+
+ETICHETTE_STATO = {"Attiva": ":green-badge[Attiva]", "Progetto in corso": ":orange-badge[Progetto in corso]",
+                   "Nel cestino": ":gray-badge[Nel cestino]"}
+
+
+def badge_stato(m: dict) -> str:
+    s = stato_gita(m)
+    return ETICHETTE_STATO.get(s, f":blue-badge[{s}]")
+
+
+def carica_gpx(dest_cantiere: str | None, chiave_ui: str) -> None:
+    st.caption(f"Le gite caricate andranno in: **{nome_cantiere(dest_cantiere)}**")
+    chiave_upload = f"upload_{chiave_ui}_{st.session_state.get('upload_n', 0)}"
+    nuovi = st.file_uploader("File GPX", type=["gpx"], accept_multiple_files=True, key=chiave_upload,
+                             label_visibility="collapsed")
+    if nuovi and st.button("Importa", type="primary", width="stretch", key=f"importa_{chiave_ui}"):
+        for f in nuovi:
+            try:
+                nome, pts = leggi_gpx(f.getvalue(), f.name)
+                pts, rimossi = pulisci(pts)
+                archivio.crea(nome, pts, utente,
+                              f"Importata da {f.name}" + (f", rimossi {rimossi} punti doppi" if rimossi else ""),
+                              cantiere=dest_cantiere, waypoint=leggi_waypoint(f.getvalue()))
+                avviso(f"Importata: {nome}")
+            except (ValueError, ErroreArchivio) as e:
+                avviso(str(e), ok=False)
+        st.session_state.upload_n = st.session_state.get("upload_n", 0) + 1
+        st.rerun()
+
+
+def vai_a(pagina: str, **stato) -> None:
+    for k, v in stato.items():
+        st.session_state[k] = v
+    st.switch_page(PAGINE[pagina])
+
+
+def scadenza_token() -> datetime | None:
+    testo = getattr(archivio.d, "scadenza_token", None)
+    if not testo:
+        return None
+    try:
+        return datetime.strptime(testo.replace(" UTC", "").strip()[:19], "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+
+
+def avvisi_sistema() -> list[str]:
+    out = []
+    if amministratore and "GitHub" not in archivio.descrizione and segreti("archivio").get("tipo") != "locale" \
+            and "mount/src" in archivio.descrizione:
+        out.append("**L'archivio non sta salvando su GitHub**: le modifiche si perderanno al prossimo riavvio. "
+                   "Controlla la sezione [archivio] nei Secrets (vedi Impostazioni).")
+    sc = scadenza_token()
+    if amministratore and sc:
+        giorni = (sc - datetime.now()).days
+        if giorni < 30:
+            out.append(f"Il token di GitHub **scade fra {max(giorni, 0)} giorni** ({sc:%d/%m/%Y}): rigeneralo e "
+                       "aggiorna i Secrets, altrimenti il portale smetterà di salvare.")
+    return out
+
+
+# ================================================================ home
+
+def pagina_home():
+    ora = an.adesso().hour
+    saluto = "Buongiorno" if ora < 13 else "Buon pomeriggio" if ora < 18 else "Buonasera"
+    intestazione(f"{saluto}, {chi['nome'].split()[0]}", f"cantiere: {nome_cantiere(cantiere_sel)}")
+    for a in avvisi_sistema():
+        st.warning(a, icon=":material/warning:")
+    if cantiere_sel not in (TUTTI, SENZA) and not flotte["cantieri"].get(cantiere_sel, {}).get("rimessa"):
+        st.info("Per questo cantiere non è indicata la posizione della rimessa: puoi aggiungerla in "
+                "**Cantieri e mezzi**.", icon=":material/info:")
+    if amministratore:
+        senza = [m for m in archivio.elenco() if not m.get("cantiere") or m.get("cantiere") not in flotte["cantieri"]]
+        if senza:
+            st.info(f"Ci sono **{len(senza)} gite senza cantiere**: scegli \"Senza cantiere\" nella barra laterale e "
+                    "assegnale in Cantieri e mezzi.", icon=":material/info:")
+
+    gite = sorted([m for m in archivio.elenco() if nel_filtro(m)], key=ordine)
+    bozze = [m for m in archivio.elenco(bozze=True) if nel_filtro(m)]
+    km_r = sum(m["versioni"][-1]["km_raccolta"] for m in gite)
+    km_t = sum(m["versioni"][-1]["km_trasferimento"] for m in gite)
+    da_verif = sum(n_segnalazioni(m["id"], m["versioni"][-1]["n"]) for m in gite)
+    c = st.columns(5)
+    c[0].metric("Gite attive", len(gite), border=True)
+    c[1].metric("Km di raccolta", f"{km_r:.1f}".replace(".", ","), border=True)
+    c[2].metric("Km di trasferimento", f"{km_t:.1f}".replace(".", ","), border=True)
+    c[3].metric("Progetti in corso", len(bozze), border=True)
+    c[4].metric("Segnalazioni da verificare", da_verif, border=True,
+                help="Segmenti lunghi senza punti e brevi andata e ritorno, come nell'editor")
+
+    a1, a2, a3, a4 = st.columns(4)
+    if a1.button("Nuova gita", icon=":material/add_road:", width="stretch", type="primary"):
+        vai_a("nuove")
+    if a2.button("Carica GPX", icon=":material/upload_file:", width="stretch"):
+        vai_a("elenco", apri_caricamento=True)
+    if a3.button("Elenco gite", icon=":material/list:", width="stretch"):
+        vai_a("elenco")
+    if a4.button("Percorrenze", icon=":material/navigation:", width="stretch"):
+        vai_a("percorrenze")
+
+    sx, dx = st.columns([3, 2], gap="large")
+    with sx:
+        st.subheader("Gite del cantiere")
+        if not gite:
+            st.write("Nessuna gita. Caricale da GPX o disegnale in **Nuove gite**.")
+        for riga in range(0, min(len(gite), 9), 3):
+            cols = st.columns(3)
+            for col, m in zip(cols, gite[riga:riga + 3]):
+                v = m["versioni"][-1]
+                with col.container(border=True):
+                    st.markdown(svg_html(m["id"], v["n"], 220, 120), unsafe_allow_html=True)
+                    st.markdown(f"**{m['nome']}**  \n:gray[{v['km_tot']:.1f} km]".replace(".", ",", 1))
+                    if st.button("Apri", key=f"home_apri_{m['id']}", width="stretch"):
+                        vai_a("elenco", elenco_cerca=m["nome"])
+        if len(gite) > 9:
+            st.caption(f"E altre {len(gite) - 9} gite nell'**Elenco gite**.")
+    with dx:
+        st.subheader("Attività recente")
+        eventi = []
+        for m in archivio.tutte():
+            if not nel_filtro(m):
+                continue
+            for v in m["versioni"]:
+                eventi.append((v["data"], m["nome"], v["autore"], f"versione {v['n']}: {v['nota']}"))
+            for e in m.get("eventi", []):
+                eventi.append((e["data"], m["nome"], e["autore"], e["azione"]))
+        if not eventi:
+            st.write("Ancora nessuna attività.")
+        for data, nome, autore, cosa in sorted(eventi, reverse=True)[:10]:
+            st.markdown(f"**{nome}**  \n:gray[{data_breve(data)}, {autore}: {cosa}]")
+
+
+# ================================================================ elenco gite e scheda della gita
+
+def pagina_elenco():
+    intestazione("Elenco gite", "cerca una gita, aprila e gestiscila: modifica, rinomina, versioni, cestino")
+    c1, c2, c3 = st.columns([2.2, 3, 1.4], vertical_alignment="bottom")
+    cerca = c1.text_input("Cerca", placeholder="Cerca per nome", label_visibility="collapsed", key="elenco_cerca")
+    filtro = c2.segmented_control("Mostra", ["Attive", "Progetti in corso", "Nel cestino", "Tutte"], default="Attive",
+                                  key="elenco_filtro", label_visibility="collapsed")
+    if ruolo != "operatore":
+        dest = cantiere_sel if cantiere_sel not in (TUTTI, SENZA) else None
+        with c3.popover("Carica GPX", icon=":material/upload_file:", width="stretch",
+                        ):
+            carica_gpx(dest, "elenco")
+    if st.session_state.pop("apri_caricamento", False):
+        st.info("Usa il pulsante **Carica GPX** qui sopra a destra.", icon=":material/upload_file:")
+
+    tutte = [m for m in archivio.tutte() if nel_filtro(m)]
+    filtri = {"Attive": lambda m: stato_gita(m).startswith("Attiva"),
+              "Progetti in corso": lambda m: stato_gita(m) == "Progetto in corso",
               "Nel cestino": lambda m: stato_gita(m) == "Nel cestino"}
     gite = [m for m in tutte if filtri.get(filtro or "Tutte", lambda m: True)(m)]
+    if cerca.strip():
+        gite = [m for m in gite if cerca.strip().lower() in m["nome"].lower()]
+    gite = sorted(gite, key=ordine)
     if not gite:
         st.write("Nessuna gita in questa selezione.")
         return
-    df = pd.DataFrame([{"Gita": m["nome"], "Stato": stato_gita(m), "Versioni": len(m["versioni"]),
-                        "Ultimo salvataggio": data_breve(m["versioni"][-1]["data"]),
-                        "Da": m["versioni"][-1]["autore"], "Km": round(m["versioni"][-1]["km_tot"], 1)} for m in gite])
+
+    df = pd.DataFrame([{"Anteprima": svg_dati(m["id"], m["versioni"][-1]["n"], 96, 56), "Gita": m["nome"],
+                        "Stato": stato_gita(m), "Mezzo": descrizione_gita(m),
+                        "Km": round(m["versioni"][-1]["km_tot"], 1), "Versioni": len(m["versioni"]),
+                        "Ultima modifica": data_breve(m["versioni"][-1]["data"]),
+                        "Da": m["versioni"][-1]["autore"]} for m in gite])
     evento = st.dataframe(df, hide_index=True, width="stretch", on_select="rerun", selection_mode="multi-row",
-                          key=chiave(f"arch_{cant}_{filtro}"))
+                          row_height=60, key=chiave(f"elenco_{cantiere_sel}_{filtro}_{cerca}"),
+                          column_config={"Anteprima": st.column_config.ImageColumn(width="small"),
+                                         "Gita": st.column_config.TextColumn(width="medium"),
+                                         "Km": st.column_config.NumberColumn(format="%.1f")})
     scelte = [gite[i] for i in evento.selection.rows if i < len(gite)]
+    if not scelte and len(gite) == 1 and cerca.strip():
+        scelte = gite
+    if len(scelte) == 1:
+        scheda_gita(scelte[0])
+    elif len(scelte) > 1:
+        azioni_multiple(scelte)
+    else:
+        st.caption("Clicca sulla casella a sinistra di una gita per aprire la sua scheda, o di più gite per agire su "
+                   "tutte insieme.")
+
+
+def azioni_multiple(scelte: list[dict]) -> None:
     attive_sel = [m for m in scelte if not m.get("archiviata") and puo_modificare(m)]
     cestino_sel = [m for m in scelte if m.get("archiviata") and puo_modificare(m)]
-    st.caption(f"Selezionate: {len(scelte)}" if scelte else
-               "Clicca sulla casella a sinistra di una o più gite per selezionarle.")
-    b1, b2, b3, b4 = st.columns(4)
-    try:
-        if b1.button(f"Sposta nel cestino ({len(attive_sel)})", disabled=not attive_sel, width="stretch"):
-            for m in attive_sel:
+    with st.container(border=True):
+        st.markdown(f"**{len(scelte)} gite selezionate**")
+        b1, b2, b3, b4 = st.columns(4)
+        try:
+            if b1.button(f"Sposta nel cestino ({len(attive_sel)})", icon=":material/delete:",
+                         disabled=not attive_sel, width="stretch"):
+                for m in attive_sel:
+                    archivio.archivia(m["id"], utente)
+                salvato(f"Spostate nel cestino: {len(attive_sel)}")
+            if b2.button(f"Ripristina ({len(cestino_sel)})", icon=":material/restore_from_trash:",
+                         disabled=not cestino_sel, width="stretch"):
+                for m in cestino_sel:
+                    archivio.archivia(m["id"], utente, archiviata=False)
+                salvato(f"Ripristinate: {len(cestino_sel)}")
+            b3.download_button(f"Scarica GPX ({len(scelte)})", icon=":material/download:", width="stretch",
+                               data=archivio.zip_ultime(scelte), mime="application/zip",
+                               file_name=f"gite_{datetime.now():%Y%m%d}.zip")
+            if amministratore:
+                with b4.popover(f"Elimina definitivamente ({len(cestino_sel)})", icon=":material/delete_forever:",
+                                disabled=not cestino_sel, width="stretch"):
+                    st.write("Le gite e **tutte le loro versioni** saranno cancellate e non si potranno recuperare:")
+                    st.write(", ".join(m["nome"] for m in cestino_sel))
+                    if st.button("Sì, elimina definitivamente", type="primary"):
+                        for m in cestino_sel:
+                            archivio.elimina_definitivamente(m["id"], utente)
+                        salvato(f"Eliminate definitivamente: {len(cestino_sel)}")
+        except (ErroreArchivio, ValueError) as e:
+            st.error(str(e))
+        if any(not m.get("archiviata") for m in scelte) and amministratore:
+            st.caption("Per eliminare definitivamente una gita, prima spostala nel cestino.")
+
+
+def scheda_gita(m: dict) -> None:
+    ultima = m["versioni"][-1]
+    mod = puo_modificare(m)
+    bozza, cestino = m.get("stato") == "bozza", bool(m.get("archiviata"))
+    with st.container(border=True):
+        sx, dx = st.columns([1.1, 2], gap="large")
+        sx.markdown(svg_html(m["id"], ultima["n"], 360, 230, 3), unsafe_allow_html=True)
+        with dx:
+            st.markdown(f"### {m['nome']}")
+            st.markdown(f"{badge_stato(m)} &nbsp; :gray[{descrizione_gita(m)} · versione {ultima['n']}, "
+                        f"salvata il {data_breve(ultima['data'])} da {ultima['autore']}]")
+            k = st.columns(4)
+            k[0].metric("Totale", f"{ultima['km_tot']:.1f} km".replace(".", ","))
+            k[1].metric("Raccolta", f"{ultima['km_raccolta']:.1f} km".replace(".", ","))
+            k[2].metric("Trasferimento", f"{ultima['km_trasferimento']:.1f} km".replace(".", ","))
+            k[3].metric("Punti d'interesse", ultima.get("note_mappa", 0))
+        b = st.columns(5)
+        try:
+            if b[0].button("Modifica", icon=":material/edit:", type="primary", width="stretch",
+                           disabled=not mod or cestino,
+                           help="Apre la gita nell'area di progettazione" if bozza else "Apre la gita nell'editor"):
+                if bozza:
+                    st.session_state.pagina = "crea"
+                    st.session_state.crea_cantiere_iniziale = m.get("cantiere")
+                    st.session_state.crea_seleziona = {"id": m["id"], "n": str(time.time())}
+                    st.rerun()
+                if m.get("cantiere") in flotte["cantieri"] and cantiere_sel not in (TUTTI, m.get("cantiere")):
+                    st.session_state.cantiere_sel = m.get("cantiere")
+                vai_a("editor", editor_seleziona={"id": m["id"], "n": str(time.time())},
+                      **{f"ed_mezzo_{m.get('cantiere')}": TUTTI})
+            with b[1].popover("Rinomina", icon=":material/text_fields:", width="stretch", disabled=not mod):
+                nuovo = st.text_input("Nuovo nome", value=m["nome"], key=f"rin_{m['id']}")
+                if st.button("Salva il nome", type="primary", key=f"rin_ok_{m['id']}"):
+                    archivio.rinomina(m["id"], nuovo, utente)
+                    salvato(f"Rinominata in \"{nuovo.strip()}\"")
+            if b[2].button("Naviga", icon=":material/navigation:", width="stretch", disabled=cestino or bozza,
+                           help="Apre la guida come la vedrà l'operatore"):
+                st.session_state.guida = (m["id"], versione_operatori(m))
+                st.rerun()
+            b[3].download_button("GPX", icon=":material/download:", width="stretch", key=f"gpx_{m['id']}",
+                                 data=archivio.gpx(m["id"], ultima["n"]), mime="application/gpx+xml",
+                                 file_name=f"{m['nome']}_v{ultima['n']}.gpx".replace(" ", "_"))
+            if cestino:
+                if b[4].button("Ripristina", icon=":material/restore_from_trash:", width="stretch", disabled=not mod):
+                    archivio.archivia(m["id"], utente, archiviata=False)
+                    salvato(f"Ripristinata: {m['nome']}")
+            elif b[4].button("Cestino", icon=":material/delete:", width="stretch", disabled=not mod):
                 archivio.archivia(m["id"], utente)
-            salvato(f"Spostate nel cestino: {len(attive_sel)}")
-        if b2.button(f"Ripristina ({len(cestino_sel)})", disabled=not cestino_sel, width="stretch"):
-            for m in cestino_sel:
-                archivio.archivia(m["id"], utente, archiviata=False)
-            salvato(f"Ripristinate: {len(cestino_sel)}")
-        b3.download_button(f"Scarica GPX ({len(scelte)})", disabled=not scelte, width="stretch",
-                           data=archivio.zip_ultime(scelte) if scelte else b"", mime="application/zip",
-                           file_name=f"gite_{datetime.now():%Y%m%d}.zip")
-        if amministratore:
-            with b4.popover(f"Elimina definitivamente ({len(cestino_sel)})", disabled=not cestino_sel,
-                            width="stretch"):
-                st.write("Le gite e **tutte le loro versioni** saranno cancellate e non si potranno recuperare:")
-                st.write(", ".join(m["nome"] for m in cestino_sel))
-                if st.button("Sì, elimina definitivamente", type="primary"):
-                    for m in cestino_sel:
+                salvato(f"\"{m['nome']}\" spostata nel cestino")
+            if cestino and amministratore:
+                with st.popover("Elimina definitivamente", icon=":material/delete_forever:"):
+                    st.write(f"**{m['nome']}** e tutte le sue {len(m['versioni'])} versioni saranno cancellate "
+                             "e non si potranno recuperare.")
+                    if st.button("Sì, elimina definitivamente", type="primary", key=f"del_{m['id']}"):
                         archivio.elimina_definitivamente(m["id"], utente)
-                    salvato(f"Eliminate definitivamente: {len(cestino_sel)}")
-        else:
-            b4.caption("L'eliminazione definitiva dal cestino è riservata all'amministratore.")
-    except (ErroreArchivio, ValueError) as e:
-        st.error(str(e))
-    if scelte and any(not m.get("archiviata") for m in scelte):
-        st.caption("Per eliminare definitivamente una gita, prima spostala nel cestino.")
+                        salvato(f"Eliminata definitivamente: {m['nome']}")
+        except (ErroreArchivio, ValueError) as e:
+            st.error(str(e))
+
+        t_ver, t_att = st.tabs(["Versioni", "Attività"])
+        with t_ver:
+            pub = m.get("pubblicata")
+            if not bozza and not cestino:
+                if pub:
+                    st.warning(f"Gli operatori usano la versione {pub['n']}, fissata da {pub['autore']} il "
+                               f"{data_breve(pub['data'])}." + (f" La versione {ultima['n']} non la vedono."
+                                                                 if pub["n"] != ultima["n"] else ""))
+                else:
+                    st.caption(f"Gli operatori vedono sempre l'ultima versione (ora la {ultima['n']}).")
+            st.dataframe([{"Versione": v["n"], "Operatori": "✓" if not bozza and v["n"] == versione_operatori(m) else "",
+                           "Data": data_breve(v["data"]), "Autore": v["autore"], "Nota": v["nota"],
+                           "Km": v["km_tot"], "Punti": v["punti"], "Punti d'interesse": v.get("note_mappa", 0)}
+                          for v in reversed(m["versioni"])], hide_index=True, width="stretch")
+            cv, c1, c2, c3 = st.columns([1.2, 1.4, 1.6, 1.8], vertical_alignment="bottom")
+            n = cv.selectbox("Versione", [v["n"] for v in reversed(m["versioni"])], key=f"ver_{m['id']}")
+            c1.download_button("Scarica questa versione", data=archivio.gpx(m["id"], n), width="stretch",
+                               file_name=f"{m['nome']}_v{n}.gpx".replace(" ", "_"), mime="application/gpx+xml",
+                               key=f"gpxv_{m['id']}")
+            try:
+                if c2.button("Ripristina questa versione", width="stretch", key=f"rip_{m['id']}",
+                             disabled=n == ultima["n"] or not mod or cestino):
+                    nuova = archivio.ripristina(m["id"], n, utente)
+                    salvato(f"La versione {n} è tornata attuale come versione {nuova}")
+                if not bozza and not cestino:
+                    if pub:
+                        if c3.button("Usa sempre l'ultima versione", width="stretch", disabled=not mod,
+                                     key=f"sbl_{m['id']}"):
+                            archivio.sblocca(m["id"], utente)
+                            salvato(f"{m['nome']}: gli operatori vedono l'ultima versione")
+                    elif c3.button(f"Fissa la v{n} per gli operatori", width="stretch", disabled=not mod,
+                                   key=f"fis_{m['id']}",
+                                   help="Gli operatori continuano a usare questa versione finché non la sblocchi"):
+                        archivio.pubblica(m["id"], n, utente)
+                        salvato(f"{m['nome']}: gli operatori usano la versione {n}")
+            except (ErroreArchivio, ValueError) as e:
+                st.error(str(e))
+        with t_att:
+            voci = [(v["data"], v["autore"], f"versione {v['n']}: {v['nota']}") for v in m["versioni"]] + \
+                   [(e["data"], e["autore"], e["azione"]) for e in m.get("eventi", [])]
+            for data, autore, cosa in sorted(voci, reverse=True):
+                st.markdown(f":gray[{data_breve(data)}] **{autore}**: {cosa}")
+
+
+# ================================================================ editor
+
+def pagina_editor():
+    c1, c2 = st.columns([3, 1.3], vertical_alignment="bottom")
+    with c1:
+        intestazione("Editor", "correggi le gite: punti, trasferimenti, punti d'interesse")
+    mezzo = TUTTI
+    if cantiere_sel not in (TUTTI, SENZA):
+        opz = [TUTTI] + an.mezzi_del_cantiere(flotte, cantiere_sel) + [SENZA]
+        mezzo = c2.selectbox("Mezzo", opz, key=f"ed_mezzo_{cantiere_sel}",
+                             format_func=lambda k: "Tutti i mezzi" if k == TUTTI else an.etichetta_mezzo(flotte, k))
+    gite = sorted([m for m in archivio.elenco() if nel_filtro(m, mezzo)], key=ordine)
+    risposta = editor(data=dati_per_editor(gite), data_version=f"{archivio.impronta()}|{cantiere_sel}|{mezzo}",
+                      user=utente, msg=st.session_state.get("msg"), height=ALTEZZA_EDITOR,
+                      seleziona=st.session_state.get("editor_seleziona"), key="editor", default=None)
+    gestisci(risposta, cantiere_sel if cantiere_sel not in (TUTTI, SENZA) else None,
+             mezzo if mezzo not in (TUTTI, SENZA) else None)
+
+
+# ================================================================ impostazioni
+
+def pagina_impostazioni():
+    intestazione("Impostazioni", "stato dell'archivio e informazioni sul portale")
+    for a in avvisi_sistema():
+        st.warning(a, icon=":material/warning:")
+    st.subheader("Archivio dei dati")
+    github = "GitHub" in archivio.descrizione
+    st.markdown(f"{':green-badge[Permanente]' if github else ':orange-badge[Cartella locale]'} &nbsp; {archivio.descrizione}")
+    if github:
+        sc = scadenza_token()
+        st.write(f"Il token di accesso scade il **{sc:%d/%m/%Y}**." if sc else
+                 "La scadenza del token sarà indicata dopo il primo salvataggio.")
+    else:
+        st.caption("Se il portale gira su Streamlit Community Cloud, una cartella locale si azzera a ogni riavvio: "
+                   "configura la sezione [archivio] nei Secrets come descritto nel README.")
+    tutte = archivio.tutte()
+    c = st.columns(4)
+    c[0].metric("Gite in archivio", len(tutte), border=True)
+    c[1].metric("Versioni salvate", sum(len(m["versioni"]) for m in tutte), border=True)
+    c[2].metric("Cantieri", len(flotte["cantieri"]), border=True)
+    c[3].metric("Utenti", len(utenti_doc["utenti"]), border=True)
+    st.subheader("Accesso")
+    st.write(f"Sei collegato come **{chi['nome']}** ({an.RUOLI[ruolo].lower()}).")
+    if ADMIN:
+        st.caption(f"L'accesso di emergenza '{ADMIN.get('utente')}' è definito nei Secrets dell'app.")
 
 
 # ================================================================ utenti (solo amministratore)
 
 def scheda_utenti():
+    intestazione("Utenti", "accessi, ruoli e cantieri delle persone")
     utenti = utenti_doc["utenti"]
     cantieri_nomi = {c["nome"]: cid for cid, c in flotte["cantieri"].items()}
     nome_di = {cid: n for n, cid in cantieri_nomi.items()}
@@ -825,6 +1092,9 @@ def scheda_operatore():
 
 
 def scheda_percorrenze_ufficio():
+    if cantiere_sel in miei_cantieri:
+        scheda_percorrenze(cantiere_sel)
+        return
     if not miei_cantieri:
         st.info("Non hai cantieri assegnati.")
         return
@@ -855,30 +1125,34 @@ def pagina_guida(gid: str, n: int):
         st.rerun()
 
 
-# ================================================================ schede
+# ================================================================ navigazione
 
 if st.session_state.get("guida"):
     pagina_guida(*st.session_state.guida)
-elif ruolo == "operatore":
-    scheda_operatore()
-elif st.session_state.get("pagina") == "crea" and miei_cantieri:
+elif st.session_state.get("pagina") == "crea" and miei_cantieri and ruolo != "operatore":
     pagina_crea()
 else:
-    nomi = ["Percorrenze", "Editor", "Nuove gite", "Archivio gite", "Storico versioni", "Flotta"] + \
-        (["Utenti"] if amministratore else [])
-    schede = dict(zip(nomi, st.tabs(nomi)))
-    with schede["Percorrenze"]:
-        scheda_percorrenze_ufficio()
-    with schede["Editor"]:
-        scheda_editor()
-    with schede["Nuove gite"]:
-        scheda_nuove_gite()
-    with schede["Archivio gite"]:
-        scheda_archivio()
-    with schede["Storico versioni"]:
-        scheda_storico()
-    with schede["Flotta"]:
-        scheda_flotta()
-    if amministratore:
-        with schede["Utenti"]:
-            scheda_utenti()
+    if ruolo == "operatore":
+        PAGINE = {"percorrenze": st.Page(scheda_operatore, title="Percorrenze", icon=":material/navigation:",
+                                         url_path="percorrenze", default=True)}
+        navigazione = st.navigation(list(PAGINE.values()), position="hidden")
+    else:
+        PAGINE = {
+            "home": st.Page(pagina_home, title="Home", icon=":material/home:", url_path="home", default=True),
+            "elenco": st.Page(pagina_elenco, title="Elenco gite", icon=":material/format_list_bulleted:", url_path="gite"),
+            "editor": st.Page(pagina_editor, title="Editor", icon=":material/edit_road:", url_path="editor"),
+            "nuove": st.Page(scheda_nuove_gite, title="Nuove gite", icon=":material/add_road:", url_path="nuove-gite"),
+            "percorrenze": st.Page(scheda_percorrenze_ufficio, title="Percorrenze", icon=":material/navigation:",
+                                   url_path="percorrenze"),
+            "flotta": st.Page(scheda_flotta, title="Cantieri e mezzi", icon=":material/local_shipping:",
+                              url_path="cantieri-e-mezzi"),
+            "utenti": st.Page(scheda_utenti, title="Utenti", icon=":material/group:", url_path="utenti"),
+            "impostazioni": st.Page(pagina_impostazioni, title="Impostazioni", icon=":material/settings:",
+                                    url_path="impostazioni"),
+        }
+        organizzazione = [PAGINE["flotta"]] + ([PAGINE["utenti"]] if amministratore else []) + [PAGINE["impostazioni"]]
+        navigazione = st.navigation({"": [PAGINE["home"]],
+                                     "Gite": [PAGINE[k] for k in ("elenco", "editor", "nuove", "percorrenze")],
+                                     "Organizzazione": organizzazione})
+    barra_laterale_fondo()
+    navigazione.run()
