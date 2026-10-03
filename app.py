@@ -47,6 +47,13 @@ if LOGO.exists():
     except TypeError:
         st.logo(str(LOGO))
 
+# Streamlit dichiara le pagine in inglese: Chrome propone di "tradurle" e storpia i testi.
+# Diciamo al browser che la pagina è in italiano e che non va tradotta.
+components.html("<script>try{const d=window.parent.document,h=d.documentElement;h.lang='it';h.setAttribute('translate','no');"
+                "if(!d.querySelector('meta[name=google]')){const m=d.createElement('meta');m.name='google';m.content='notranslate';"
+                "d.head.appendChild(m);}d.body.classList.add('notranslate');}catch(e){}</script>", height=0)
+st.markdown("<style>iframe[height='0']{display:none}</style>", unsafe_allow_html=True)
+
 editor = components.declare_component("editor_percorsi", path=str(BASE / "editor"))
 guida = components.declare_component("guida_percorsi", path=str(BASE / "guida"))
 
