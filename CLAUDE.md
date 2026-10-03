@@ -51,7 +51,9 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 - Disegno: `modo` = 'disegna' | 'punto' | null; `clickMappa()` aggiunge punti alla fine o dopo il punto selezionato.
 - Pagina "Crea una nuova gita" (`pagina_crea()`, `st.session_state.pagina == "crea"`): barra laterale nascosta, editor con argomento `mode="crea"` (classe `modo-crea`, elementi `.solo-crea` / `.solo-editor`, altezza dalla finestra). Le bozze sono gite con `stato: "bozza"` in meta.json: `elenco()` le esclude, `elenco(bozze=True)` le restituisce, `Archivio.concludi()` toglie lo stato. Azioni dell'editor con `stato` = 'bozza' | 'concludi' | null, gestite da `gestisci()` in app.py.
 - Stile: verde Cristoforo `#009640` (CSS in app.py, `--brand` nell'editor, `primaryColor` in .streamlit/config.toml); logo e icona in `assets/`.
-- Pagina operatore: gite pubblicate del mezzo per il giorno (fuso Europe/Rome, `an.adesso()`), ordinate per turno e numero; sostituzione giornaliera in `st.session_state.sostituzione` = (data, mezzo).
+- Pagina operatore (`scheda_operatore`): tutte le gite **pubblicate** del cantiere, ricerca per nome, pulsante "Avvia navigazione". Per scelta dell'utente, per ora nessun legame con il mezzo.
+- Guida (`guida/index.html`, componente `guida_percorsi`, `pagina_guida()` con `st.session_state.guida = (id, versione)`): usa GPS (`watchPosition`) e Wake Lock, permessi concessi agli iframe dei componenti Streamlit. Avanzamento lungo la **sequenza**: `migliore()` cerca il tratto in una finestra da pos-60 m a pos+450 m e, tra tratti ugualmente vicini (ripassi), sceglie il primo non superato; salto in avanti dopo 3 posizioni concordi; fuori percorso oltre 35 m. Svolte da variazione di rotta ≥ 35°, voce con speechSynthesis it-IT. Avanzamento salvato in localStorage per gita, versione e giorno. **Nessun dato di posizione viene inviato al server**: non aggiungere invii senza l'accordo art. 4 e la DPIA.
+- Dallo Storico, "Prova la navigazione" apre la guida per qualsiasi ruolo; "Prova senza GPS" simula il percorso.
 
 ### Punti e tratti
 - Un punto è `[lat, lon, tipo]`, con tipo `"r"` (raccolta) o `"t"` (trasferimento).
@@ -90,7 +92,7 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 
 ## Prossimi passi, in ordine
 
-Fatto: accessi con ruoli, cantieri, mezzi, assegnazione delle gite (mezzo, numero, turno, giorni), pubblicazione delle versioni, mezzo abituale degli operatori, vista "Oggi" con sostituzioni, punti e note sulla mappa (waypoint), pagina "Crea una nuova gita" con bozze sul server, stile e logo Cristoforo.
+Fatto: accessi con ruoli, cantieri, mezzi, assegnazione delle gite (mezzo, numero, turno, giorni), pubblicazione delle versioni, mezzo abituale degli operatori, vista "Oggi" con sostituzioni, punti e note sulla mappa (waypoint), pagina "Crea una nuova gita" con bozze sul server, stile e logo Cristoforo, navigazione integrata per gli operatori (vie colorate, percentuale, indicazioni vocali).
 
 Prossimo nel portale: **foglio di marcia** in PDF (elenco vie nell'ordine di percorrenza, note, mappa) per sostituti e affiancamenti; poi accesso che resta ricaricando la pagina e nome automatico delle gite.
 

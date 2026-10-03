@@ -47,11 +47,26 @@ Nell'editor, sezione **Percorso e punti d'interesse**:
 
 Punti e note vengono salvati nel GPX della gita come waypoint, insieme al percorso e con lo stesso storico delle versioni. OsmAnd li mostra sulla mappa quando l'operatore apre il giro.
 
+## Navigazione per gli operatori
+
+L'operatore entra dal telefono, vede le gite **pubblicate** del suo cantiere (con ricerca per nome) e preme **Avvia navigazione**. La guida si apre a tutto schermo:
+
+- indicazione della prossima svolta, anche a voce ("Gira a destra tra 80 metri", "Inversione a U");
+- tratti già percorsi in verde, prossimi 300 metri in arancione, percentuale di avanzamento;
+- avviso quando si esce dal percorso e riquadro (con vibrazione) all'arrivo a un punto d'interesse;
+- segue la **sequenza** della gita, quindi regge i ripassi sulla stessa strada;
+- schermo sempre acceso; se la pagina si chiude, la navigazione riprende dal punto raggiunto (stesso giorno);
+- a fine giro, riepilogo con percentuale e tratti non percorsi, evidenziabili in rosso sulla mappa.
+
+**Privacy:** la posizione resta sul telefono. Nulla viene inviato al server: per questo non è un controllo a distanza. Inviare all'ufficio percentuali o tratti saltati richiederebbe prima l'accordo sindacale o l'autorizzazione dell'Ispettorato (art. 4 Statuto dei Lavoratori) e la valutazione d'impatto GDPR.
+
+Dall'ufficio, nella scheda Storico versioni, **Prova la navigazione** apre la stessa guida; con **Prova senza GPS** la gita scorre da sola (utile anche come ripasso per i sostituti). Il pulsante **GPX** resta disponibile per chi preferisce un'altra app, come OsmAnd.
+
 ## Pubblicazione e pagina per gli operatori
 
 Una correzione inviata non arriva subito sul mezzo. Un responsabile o l'amministratore la **pubblica** dalla scheda Storico versioni (oppure in blocco dalla scheda Flotta): da quel momento è la versione che vedono gli operatori.
 
-L'operatore ha un **mezzo abituale**, impostato nella scheda Utenti. Quando entra dal telefono vede le gite pubblicate del suo mezzo previste per oggi (o domani), ordinate per turno e numero, e scarica il giro da aprire in OsmAnd. Se guida un altro mezzo, lo sceglie con "Oggi guido un altro mezzo": vale solo per quel giorno.
+Per ora l'operatore vede tutte le gite pubblicate del cantiere, senza legame con il mezzo (il mezzo abituale nella scheda Utenti resta disponibile per sviluppi futuri).
 
 ## Come funziona per chi lo usa
 

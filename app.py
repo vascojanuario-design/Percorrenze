@@ -44,6 +44,7 @@ if LOGO.exists():
         st.logo(str(LOGO))
 
 editor = components.declare_component("editor_percorsi", path=str(BASE / "editor"))
+guida = components.declare_component("guida_percorsi", path=str(BASE / "guida"))
 
 
 def segreti(sezione: str) -> dict:
@@ -414,6 +415,10 @@ def scheda_storico():
             st.rerun()
     except (ErroreArchivio, ValueError) as e:
         st.error(str(e))
+    if st.button(f"▶  Prova la navigazione (versione {n})", help="Apre la guida come la vedrà l'operatore. "
+                 "Con \"Prova senza GPS\" la gita scorre da sola."):
+        st.session_state.guida = (m["id"], n)
+        st.rerun()
     for e in reversed(m.get("eventi", [])):
         st.caption(f"{data_breve(e['data'])}: {e['azione']} da {e['autore']}")
 
@@ -657,83 +662,65 @@ def scheda_utenti():
 
 # ================================================================ operatori
 
-GIORNI_ESTESI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
-
-
 def scheda_operatore():
-    ora = an.adesso()
-    oggi = ora.date().isoformat()
-    mezzi_cantiere = an.mezzi_del_cantiere(flotte, cantiere_sel, solo_attivi=True)
-    mio = chi.get("mezzo") if chi.get("mezzo") in flotte["mezzi"] else None
-    sost = st.session_state.get("sostituzione")
-    if sost and sost[0] != oggi:
-        sost = None
-        st.session_state.pop("sostituzione", None)
-    mezzo = sost[1] if sost else mio
-
-    quando = st.radio("Giorno", ["Oggi", "Domani"], horizontal=True, label_visibility="collapsed")
-    idx = (ora.weekday() + (1 if quando == "Domani" else 0)) % 7
-    giorno = an.GIORNI[idx]
-
-    if mezzo:
-        st.header(f"Mezzo {an.etichetta_mezzo(flotte, mezzo)}")
-        st.caption(f"{quando}, {GIORNI_ESTESI[idx]}" + (". Stai sostituendo un collega su questo mezzo." if sost else ""))
-    else:
-        st.header("Scegli il mezzo")
-        st.caption("Non hai un mezzo abituale: scegli quello che guidi oggi.")
-
-    with st.expander("Oggi guido un altro mezzo" if mezzo else "Mezzi del cantiere", expanded=not mezzo):
-        altri = [m for m in mezzi_cantiere if m != mezzo]
-        if altri:
-            scelta = st.selectbox("Mezzo", altri, format_func=lambda k: an.etichetta_mezzo(flotte, k))
-            if st.button("Usa questo mezzo per oggi", type="primary", width="stretch"):
-                st.session_state.sostituzione = (oggi, scelta)
-                st.rerun()
-        if sost and mio and st.button("Torna al mio mezzo", width="stretch"):
-            st.session_state.pop("sostituzione", None)
-            st.rerun()
-    if not mezzo:
+    st.markdown(f"<div class='titolo-pagina'><b>Gite di {nome_cantiere(cantiere_sel)}</b>"
+                "<span>scegli la gita e avvia la navigazione</span></div>", unsafe_allow_html=True)
+    gite = sorted([m for m in archivio.elenco() if m.get("cantiere") == cantiere_sel and m.get("pubblicata")],
+                  key=lambda m: m["nome"].lower())
+    if not gite:
+        st.info("In questo cantiere non ci sono ancora gite pronte per la strada. "
+                "Chiedi al responsabile di pubblicarle.")
         return
-
-    del_mezzo = [m for m in archivio.elenco() if m.get("mezzo") == mezzo]
-    approvate = [m for m in del_mezzo if m.get("pubblicata")]
-    previste = sorted([m for m in approvate if not m.get("giorni") or giorno in m["giorni"]],
-                      key=lambda m: (an.TURNI.index(m["turno"]) if m.get("turno") in an.TURNI else 9, m.get("numero") or 99))
-    in_corso = an.turno_attuale() if quando == "Oggi" else None
-
-    if not previste:
-        st.info(f"Nessuna gita approvata per {GIORNI_ESTESI[idx]} su questo mezzo.")
-    for m in previste:
+    cerca = st.text_input("Cerca", placeholder="Cerca una gita per nome", label_visibility="collapsed")
+    if cerca.strip():
+        gite = [m for m in gite if cerca.strip().lower() in m["nome"].lower()]
+        if not gite:
+            st.write("Nessuna gita con questo nome.")
+    for m in gite:
         pub = m["pubblicata"]
         v = next(x for x in m["versioni"] if x["n"] == pub["n"])
-        titolo = (f"Gita {m['numero']}" if m.get("numero") else m["nome"]) + (f", {m['turno'].lower()}" if m.get("turno") else "")
         with st.container(border=True):
-            st.markdown(f"**{titolo}**" + ("  \n:orange[turno in corso]" if m.get("turno") == in_corso else ""))
-            st.caption(f"{m['nome']}, {v['km_tot']:.1f} km".replace(".", ","))
-            st.download_button("Scarica il giro", data=archivio.gpx(m["id"], pub["n"]), type="primary",
+            st.markdown(f"**{m['nome']}**")
+            dettagli = [f"{v['km_tot']:.1f} km".replace(".", ",")]
+            if v.get("note_mappa"):
+                dettagli.append(f"{v['note_mappa']} punti d'interesse")
+            st.caption(", ".join(dettagli))
+            c1, c2 = st.columns([3, 1])
+            if c1.button("▶  Avvia navigazione", key=f"nav_{m['id']}", type="primary", width="stretch"):
+                st.session_state.guida = (m["id"], pub["n"])
+                st.rerun()
+            c2.download_button("GPX", data=archivio.gpx(m["id"], pub["n"]), key=f"dl_{m['id']}",
                                file_name=f"{m['nome']}.gpx".replace(" ", "_"), mime="application/gpx+xml",
-                               key=f"dl_{m['id']}", width="stretch")
-    if previste:
-        st.caption("Dopo il download apri il file e scegli OsmAnd, oppure da OsmAnd usa Importa.")
-    mancanti = len(del_mezzo) - len(approvate)
-    if mancanti:
-        st.caption(f"{mancanti} gite di questo mezzo non sono ancora approvate e non compaiono qui.")
+                               width="stretch", help="Per aprire la gita in un'altra app, per esempio OsmAnd")
 
-    altre = sorted([m for m in archivio.elenco() if m.get("cantiere") == cantiere_sel and m.get("pubblicata")
-                    and m.get("mezzo") != mezzo], key=ordine)
-    if altre:
-        with st.expander("Tutte le altre gite approvate del cantiere"):
-            for m in altre:
-                c1, c2 = st.columns([3, 1], vertical_alignment="center")
-                c1.write(f"{m['nome']}  \n{descrizione_gita(m)}")
-                c2.download_button("Scarica", data=archivio.gpx(m["id"], m["pubblicata"]["n"]),
-                                   file_name=f"{m['nome']}.gpx".replace(" ", "_"), mime="application/gpx+xml",
-                                   key=f"dla_{m['id']}")
+
+def pagina_guida(gid: str, n: int):
+    st.markdown("<style>[data-testid='stSidebar'],[data-testid='stSidebarCollapsedControl'],"
+                "[data-testid='stExpandSidebarButton'],header[data-testid='stHeader']{display:none!important}"
+                ".block-container{padding:0.4rem 0.4rem 0!important}"
+                "iframe[title='app.guida_percorsi']{border-radius:10px}</style>", unsafe_allow_html=True)
+    try:
+        m = archivio.meta(gid)
+        pts, wpts = contenuto_versione(gid, n)
+    except (FileNotFoundError, StopIteration, ValueError):
+        st.session_state.pop("guida", None)
+        st.rerun()
+    if st.button("← Torna alle gite"):
+        st.session_state.pop("guida", None)
+        st.rerun()
+    risposta = guida(gita={"id": gid, "version": n, "name": m["nome"], "pts": pts, "wpts": wpts},
+                     key=f"guida_{gid}_{n}", default=None)
+    if risposta and risposta.get("azione") == "chiudi" and risposta.get("nonce") != st.session_state.get("guida_nonce"):
+        st.session_state.guida_nonce = risposta["nonce"]
+        st.session_state.pop("guida", None)
+        st.rerun()
 
 
 # ================================================================ schede
 
-if ruolo == "operatore":
+if st.session_state.get("guida"):
+    pagina_guida(*st.session_state.guida)
+elif ruolo == "operatore":
     scheda_operatore()
 elif st.session_state.get("pagina") == "crea" and miei_cantieri:
     pagina_crea()
