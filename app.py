@@ -4,6 +4,7 @@ Avvio:  streamlit run app.py
 Configurazione nei secrets (vedi README): [archivio] per dove salvare, [amministratore] per il primo accesso.
 """
 import os
+import secrets as segreto
 import time
 from datetime import datetime
 from pathlib import Path
@@ -95,6 +96,34 @@ def righe(df: pd.DataFrame) -> list[dict]:
 
 utenti_doc = archivio.leggi_doc("utenti", an.UTENTI_VUOTO)
 
+
+@st.cache_resource
+def gettoni() -> dict:
+    """Gettoni monouso (10 minuti) per aprire l'area di progettazione in un'altra finestra già collegati."""
+    return {}
+
+
+def nuovo_gettone(chi: dict) -> str:
+    adesso = time.time()
+    for k in [k for k, (scad, _) in gettoni().items() if scad < adesso]:
+        gettoni().pop(k, None)
+    t = segreto.token_urlsafe(24)
+    gettoni()[t] = (adesso + 600, dict(chi))
+    return t
+
+
+qp = st.query_params
+if qp.get("t"):
+    voce = gettoni().pop(qp.get("t"), None)
+    if voce and voce[0] > time.time() and "chi" not in st.session_state:
+        st.session_state.chi = voce[1]
+    if qp.get("area") == "crea":
+        st.session_state.pagina = "crea"
+        st.session_state.finestra_separata = True
+        if qp.get("c"):
+            st.session_state.crea_cantiere_iniziale = qp.get("c")
+    st.query_params.clear()
+
 if "chi" not in st.session_state:
     dal_proxy = st.context.headers.get(HEADER_UTENTE)
     u = utenti_doc["utenti"].get((dal_proxy or "").lower())
@@ -167,15 +196,6 @@ with st.sidebar:
         mezzi_opz = [TUTTI] + an.mezzi_del_cantiere(flotte, cantiere_sel) + [SENZA]
         mezzo_sel = st.selectbox("Mezzo", mezzi_opz, key=f"mezzo_sel_{cantiere_sel}",
                                  format_func=lambda m: "Tutti i mezzi" if m == TUTTI else an.etichetta_mezzo(flotte, m))
-
-    if ruolo != "operatore" and miei_cantieri:
-        if st.button("✏️  Crea una nuova gita", type="primary", width="stretch",
-                     help="Apre l'area di lavoro a tutto schermo per disegnare una gita senza GPX"):
-            st.session_state.pagina = "crea"
-            st.rerun()
-        n_bozze = len([m for m in archivio.elenco(bozze=True) if m.get("cantiere") in miei_cantieri])
-        if n_bozze:
-            st.caption(f"Progetti in corso: {n_bozze}")
 
     if ruolo != "operatore" and cantiere_sel:
         st.divider()
@@ -329,11 +349,17 @@ def pagina_crea():
                 "[data-testid='stExpandSidebarButton']{display:none!important}"
                 ".block-container{padding-top:2.4rem!important}</style>", unsafe_allow_html=True)
     testa = st.columns([3.2, 2, 2, 1.5], vertical_alignment="bottom")
-    testa[0].markdown("<div class='titolo-pagina'><b>Crea una nuova gita</b>"
+    testa[0].markdown("<div class='titolo-pagina'><b>Area di progettazione</b>"
                       "<span>disegna il percorso e i punti d'interesse</span></div>", unsafe_allow_html=True)
-    if testa[3].button("← Torna al portale", width="stretch"):
+    separata = st.session_state.get("finestra_separata")
+    if testa[3].button("Vai al portale" if separata else "← Torna al portale", width="stretch",
+                       help="Quando hai salvato puoi anche chiudere questa finestra" if separata else None):
         st.session_state.pagina = None
+        st.session_state.finestra_separata = False
         st.rerun()
+    iniziale = st.session_state.pop("crea_cantiere_iniziale", None)
+    if iniziale in miei_cantieri:
+        st.session_state.crea_cantiere = iniziale
     cant = testa[1].selectbox("Cantiere", miei_cantieri, format_func=nome_cantiere, key="crea_cantiere",
                               index=miei_cantieri.index(cantiere_sel) if cantiere_sel in miei_cantieri else 0)
     mezzi = [None] + an.mezzi_del_cantiere(flotte, cant, solo_attivi=True)
@@ -583,6 +609,118 @@ def stato_pubblicazione(m: dict) -> str:
     return f"v{pub['n']}" + (f" (ultima v{ultima})" if pub["n"] != ultima else "")
 
 
+# ================================================================ nuove gite e archivio
+
+def stato_gita(m: dict) -> str:
+    if m.get("archiviata"):
+        return "Nel cestino"
+    if m.get("stato") == "bozza":
+        return "Progetto in corso"
+    pub, ultima = m.get("pubblicata"), m["versioni"][-1]["n"]
+    if not pub:
+        return "Conclusa, da pubblicare"
+    return f"In strada (v{pub['n']})" + (f", v{ultima} da pubblicare" if pub["n"] != ultima else "")
+
+
+def scheda_nuove_gite():
+    if not miei_cantieri:
+        st.info("Non hai cantieri assegnati.")
+        return
+    st.markdown("<div class='titolo-pagina'><b>Nuove gite</b><span>per creare gite senza GPX, disegnandole sulla mappa"
+                "</span></div>", unsafe_allow_html=True)
+    cant = st.selectbox("Cantiere", miei_cantieri, format_func=nome_cantiere, key="nuove_cantiere",
+                        index=miei_cantieri.index(cantiere_sel) if cantiere_sel in miei_cantieri else 0)
+    c1, c2 = st.columns([2, 1])
+    url = f"./?area=crea&c={cant}&t={nuovo_gettone(chi)}"
+    c1.link_button("🗺️  Apri l'area di progettazione in una nuova finestra", url, type="primary", width="stretch")
+    if c2.button("Apri qui", width="stretch", help="Se il browser blocca le nuove finestre"):
+        st.session_state.pagina = "crea"
+        st.session_state.crea_cantiere_iniziale = cant
+        st.rerun()
+    st.caption("Nell'area di progettazione disegni il percorso, aggiungi i punti d'interesse e salvi la bozza. "
+               "I progetti salvati restano qui sotto finché non li concludi: a quel punto passano tra le gite del "
+               "cantiere, pronti per essere pubblicati.")
+    bozze = [m for m in archivio.elenco(bozze=True) if m.get("cantiere") == cant]
+    st.subheader(f"Progetti in corso: {len(bozze)}")
+    if not bozze:
+        st.write("Nessun progetto in corso in questo cantiere.")
+        return
+    for m in sorted(bozze, key=lambda x: x["versioni"][-1]["data"], reverse=True):
+        v = m["versioni"][-1]
+        with st.container(border=True):
+            a, b = st.columns([4, 1], vertical_alignment="center")
+            a.markdown(f"**{m['nome']}**  \n:gray[{v['km_tot']:.1f} km, {v.get('note_mappa', 0)} punti d'interesse, "
+                       f"salvato il {data_breve(v['data'])} da {v['autore']}]".replace(".", ",", 1))
+            if b.button("Elimina", key=f"del_bozza_{m['id']}", width="stretch", disabled=not puo_modificare(m)):
+                archivio.archivia(m["id"], utente)
+                avviso(f"Progetto \"{m['nome']}\" spostato nel cestino")
+                st.rerun()
+
+
+def scheda_archivio():
+    opzioni = miei_cantieri + ([SENZA] if amministratore else [])
+    if not opzioni:
+        st.info("Non hai cantieri assegnati.")
+        return
+    st.markdown("<div class='titolo-pagina'><b>Archivio gite</b><span>tutti i file del cantiere: progetti, gite "
+                "concluse, gite in strada e cestino</span></div>", unsafe_allow_html=True)
+    c1, c2 = st.columns([1, 2])
+    cant = c1.selectbox("Cantiere", opzioni, format_func=nome_cantiere, key="arch_cantiere",
+                        index=opzioni.index(cantiere_sel) if cantiere_sel in opzioni else 0)
+    filtro = c2.segmented_control("Mostra", ["Tutte", "Progetti in corso", "Concluse", "In strada", "Nel cestino"],
+                                  default="Tutte", key="arch_filtro")
+    def del_cantiere(m):
+        return (m.get("cantiere") is None or m.get("cantiere") not in flotte["cantieri"]) if cant == SENZA \
+            else m.get("cantiere") == cant
+    tutte = [m for m in archivio.tutte() if del_cantiere(m)]
+    filtri = {"Progetti in corso": lambda m: stato_gita(m) == "Progetto in corso",
+              "Concluse": lambda m: stato_gita(m) == "Conclusa, da pubblicare",
+              "In strada": lambda m: stato_gita(m).startswith("In strada"),
+              "Nel cestino": lambda m: stato_gita(m) == "Nel cestino"}
+    gite = [m for m in tutte if filtri.get(filtro or "Tutte", lambda m: True)(m)]
+    if not gite:
+        st.write("Nessuna gita in questa selezione.")
+        return
+    df = pd.DataFrame([{"Gita": m["nome"], "Stato": stato_gita(m), "Versioni": len(m["versioni"]),
+                        "Ultimo salvataggio": data_breve(m["versioni"][-1]["data"]),
+                        "Da": m["versioni"][-1]["autore"], "Km": round(m["versioni"][-1]["km_tot"], 1)} for m in gite])
+    evento = st.dataframe(df, hide_index=True, width="stretch", on_select="rerun", selection_mode="multi-row",
+                          key=chiave(f"arch_{cant}_{filtro}"))
+    scelte = [gite[i] for i in evento.selection.rows if i < len(gite)]
+    attive_sel = [m for m in scelte if not m.get("archiviata") and puo_modificare(m)]
+    cestino_sel = [m for m in scelte if m.get("archiviata") and puo_modificare(m)]
+    st.caption(f"Selezionate: {len(scelte)}" if scelte else
+               "Clicca sulla casella a sinistra di una o più gite per selezionarle.")
+    b1, b2, b3, b4 = st.columns(4)
+    try:
+        if b1.button(f"Sposta nel cestino ({len(attive_sel)})", disabled=not attive_sel, width="stretch"):
+            for m in attive_sel:
+                archivio.archivia(m["id"], utente)
+            salvato(f"Spostate nel cestino: {len(attive_sel)}")
+        if b2.button(f"Ripristina ({len(cestino_sel)})", disabled=not cestino_sel, width="stretch"):
+            for m in cestino_sel:
+                archivio.archivia(m["id"], utente, archiviata=False)
+            salvato(f"Ripristinate: {len(cestino_sel)}")
+        b3.download_button(f"Scarica GPX ({len(scelte)})", disabled=not scelte, width="stretch",
+                           data=archivio.zip_ultime(scelte) if scelte else b"", mime="application/zip",
+                           file_name=f"gite_{datetime.now():%Y%m%d}.zip")
+        if amministratore:
+            with b4.popover(f"Elimina definitivamente ({len(cestino_sel)})", disabled=not cestino_sel,
+                            width="stretch"):
+                st.write("Le gite e **tutte le loro versioni** saranno cancellate e non si potranno recuperare:")
+                st.write(", ".join(m["nome"] for m in cestino_sel))
+                if st.button("Sì, elimina definitivamente", type="primary"):
+                    for m in cestino_sel:
+                        archivio.elimina_definitivamente(m["id"], utente)
+                    salvato(f"Eliminate definitivamente: {len(cestino_sel)}")
+        else:
+            b4.caption("L'eliminazione definitiva dal cestino è riservata all'amministratore.")
+    except (ErroreArchivio, ValueError) as e:
+        st.error(str(e))
+    if scelte and any(not m.get("archiviata") for m in scelte):
+        st.caption("Per eliminare definitivamente una gita, prima spostala nel cestino.")
+
+
 # ================================================================ utenti (solo amministratore)
 
 def scheda_utenti():
@@ -725,10 +863,14 @@ elif ruolo == "operatore":
 elif st.session_state.get("pagina") == "crea" and miei_cantieri:
     pagina_crea()
 else:
-    nomi = ["Editor", "Storico versioni", "Flotta"] + (["Utenti"] if amministratore else [])
+    nomi = ["Editor", "Nuove gite", "Archivio gite", "Storico versioni", "Flotta"] + (["Utenti"] if amministratore else [])
     schede = dict(zip(nomi, st.tabs(nomi)))
     with schede["Editor"]:
         scheda_editor()
+    with schede["Nuove gite"]:
+        scheda_nuove_gite()
+    with schede["Archivio gite"]:
+        scheda_archivio()
     with schede["Storico versioni"]:
         scheda_storico()
     with schede["Flotta"]:

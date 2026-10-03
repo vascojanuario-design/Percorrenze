@@ -27,9 +27,13 @@ Gli altri utenti si creano dalla scheda **Utenti**. Ognuno può cambiare la prop
 
 Ogni gita appartiene a un cantiere e a un mezzo; un mezzo può avere più gite (gita 1, 2, 3…), ognuna con turno e giorni. Si gestisce tutto dalla scheda **Flotta**, scegliendo il cantiere nella barra laterale. Le gite importate senza cantiere compaiono all'amministratore sotto "Senza cantiere", da dove si assegnano.
 
-## Creare gite senza GPX (pagina "Crea una nuova gita")
+## Archivio gite
 
-Dal pulsante verde **Crea una nuova gita** nella barra laterale si apre un'area di lavoro a tutto schermo:
+Nella scheda **Archivio gite** si sceglie il cantiere e si vedono tutte le gite con il loro stato: progetto in corso, conclusa da pubblicare, in strada (con la versione pubblicata), nel cestino. Si selezionano con la casella a sinistra e si può: spostarle nel cestino, ripristinarle, scaricarne i GPX in uno zip. L'**eliminazione definitiva** (della gita e di tutte le sue versioni) è riservata all'amministratore e vale solo per le gite già nel cestino.
+
+## Creare gite senza GPX (scheda "Nuove gite")
+
+Nella scheda **Nuove gite** si sceglie il cantiere e si apre l'**area di progettazione in una nuova finestra** del browser, già collegata con il proprio utente (con un link monouso valido 10 minuti). Se il browser blocca le nuove finestre, **Apri qui** la apre nella stessa pagina. Nell'area di progettazione:
 
 1. scegli in alto cantiere e, se lo sai già, il mezzo;
 2. **+ Nuovo progetto**, scrivi il nome e disegna cliccando sulla mappa (barra degli strumenti sopra la mappa: Disegna, Punto d'interesse, Annulla, Ripeti, Inquadra);

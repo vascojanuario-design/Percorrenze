@@ -224,6 +224,18 @@ class DepositoLocale:
             os.replace(tmp, f)
 
 
+    def cancella(self, paths: list[str], messaggio: str, autore: str) -> None:
+        # meta.json per primo: da quel momento la gita non esiste più per nessuno
+        for path in sorted(paths, key=lambda p: not p.endswith("meta.json")):
+            f = self.root / path
+            if f.is_file():
+                f.unlink()
+        for path in paths:
+            cartella = (self.root / path).parent
+            if cartella.is_dir() and not any(cartella.iterdir()):
+                cartella.rmdir()
+
+
 class DepositoGitHub:
     """Repository GitHub. Ogni salvataggio è un commit unico con tutti i file della versione.
 
@@ -333,6 +345,26 @@ class DepositoGitHub:
                 self._contenuti[sha] = dati
             self._head, self._tree_sha = commit, tree
 
+    def cancella(self, paths: list[str], messaggio: str, autore: str) -> None:
+        with self.lock:
+            voci = [{"path": p, "mode": "100644", "type": "blob", "sha": None} for p in paths if p in self._albero]
+            if not voci:
+                return
+            tree = self._chiama("POST", "/git/trees", json={"base_tree": self._tree_sha, "tree": voci})["sha"]
+            firma = {"name": autore or "Percorsi", "email": "percorsi@users.noreply.github.com", "date": _adesso()}
+            commit = self._chiama("POST", "/git/commits", json={"message": messaggio, "tree": tree,
+                                                               "parents": [self._head], "author": firma})["sha"]
+            try:
+                self._chiama("PATCH", f"/git/refs/heads/{self.branch}", json={"sha": commit, "force": False})
+            except ErroreArchivio as e:
+                if getattr(e, "status", 0) == 422:
+                    self.aggiorna(forza=True)
+                    raise ErroreArchivio("Il repository dei dati è stato modificato nel frattempo. Riprova.") from None
+                raise
+            for v in voci:
+                self._albero.pop(v["path"], None)
+            self._head, self._tree_sha = commit, tree
+
 
 # ================================================================ archivio
 
@@ -363,6 +395,10 @@ class Archivio:
         out = [json.loads(self.d.leggi(p)) for p in self.d.elenca_meta()]
         out = [m for m in out if bool(m.get("archiviata")) == archiviate and (m.get("stato") == "bozza") == bozze]
         return sorted(out, key=lambda m: m["nome"].lower())
+
+    def tutte(self) -> list[dict]:
+        """Tutte le gite: attive, bozze e archiviate."""
+        return sorted([json.loads(self.d.leggi(p)) for p in self.d.elenca_meta()], key=lambda m: m["nome"].lower())
 
     def punti(self, gid: str, n: int | None = None) -> list[Punto]:
         m = self.meta(gid)
@@ -482,6 +518,17 @@ class Archivio:
             m.setdefault("eventi", []).append({"data": _adesso(), "autore": autore, "azione": "conclusa (era una bozza)"})
             self.d.scrivi({f"{self._cartella(gid)}/meta.json": json.dumps(m, ensure_ascii=False, indent=2)},
                           f"{m['nome']}: conclusa", autore)
+
+    def elimina_definitivamente(self, gid: str, autore: str) -> None:
+        """Cancella la gita e tutte le sue versioni. Solo per gite già nel cestino (archiviate)."""
+        with self.d.lock:
+            self.d.aggiorna(forza=True)
+            m = self.meta(gid)
+            if not m.get("archiviata"):
+                raise ValueError(f"\"{m['nome']}\" non è nel cestino: spostala prima nel cestino")
+            cartella = self._cartella(gid)
+            paths = [f"{cartella}/meta.json"] + [f"{cartella}/{v['file']}" for v in m["versioni"]]
+            self.d.cancella(paths, f"{m['nome']}: eliminata definitivamente", autore)
 
     def pubblica(self, gid: str, n: int, autore: str) -> None:
         """Approva la versione n per la strada: è quella che vedranno gli operatori."""
