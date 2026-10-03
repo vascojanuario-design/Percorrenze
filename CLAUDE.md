@@ -45,7 +45,7 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 - Ogni azione dell'editor verifica i permessi lato server (`puo_modificare`).
 - Le tabelle della scheda Flotta usano `st.data_editor`; la chiave cambia dopo ogni salvataggio (`chiave()`), così ripartono dai dati salvati.
 - La sessione vive in `st.session_state`: ricaricando la pagina si rientra.
-- Pubblicazione: `meta.json` ha `pubblicata` = {n, data, autore}, impostato con `Archivio.pubblica()`. Gli operatori vedono solo la versione pubblicata, mai l'ultima bozza.
+- Versione fissata: `meta.json` può avere `pubblicata` = {n, data, autore} (`Archivio.pubblica()`); se assente gli operatori usano l'ultima versione. Le bozze (`stato: "bozza"`) non sono mai visibili agli operatori.
 - Utenti: campo `mezzo` (mezzo abituale, deve appartenere a uno dei cantieri dell'utente, `controlla_mezzo`).
 - Punti e note: `<wpt>` nel GPX con `<name>`, `<desc>` (testo) e `<type>` (cassonetto, utenza, attenzione, accesso, nota: `TIPI_WAYPOINT` in archivio.py, `TIPI_WP` nell'editor, devono coincidere). `Archivio.contenuto()` restituisce (punti, waypoint); ogni versione registra `note_mappa`. Nell'editor stanno in `g.wp`, sono incluse in annulla/ripeti, bozze e invio (`wpts`).
 - Disegno: `modo` = 'disegna' | 'punto' | null; `clickMappa()` aggiunge punti alla fine o dopo il punto selezionato.
@@ -55,7 +55,8 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 - Tema: solo `primaryColor` verde in config.toml, così ognuno può usare tema chiaro o scuro; il CSS in app.py non deve forzare colori di sfondo o testo.
 - Area di progettazione (`pagina_crea()`, `st.session_state.pagina == "crea"`): barra laterale nascosta, editor con argomento `mode="crea"` (classe `modo-crea`, elementi `.solo-crea` / `.solo-editor`, altezza dalla finestra). Le bozze sono gite con `stato: "bozza"` in meta.json: `elenco()` le esclude, `elenco(bozze=True)` le restituisce, `Archivio.concludi()` toglie lo stato. Azioni dell'editor con `stato` = 'bozza' | 'concludi' | null, gestite da `gestisci()` in app.py.
 - Stile: verde Cristoforo `#009640` (CSS in app.py, `--brand` nell'editor, `primaryColor` in .streamlit/config.toml); logo e icona in `assets/`.
-- Pagina operatore (`scheda_operatore`): tutte le gite **pubblicate** del cantiere, ricerca per nome, pulsante "Avvia navigazione". Per scelta dell'utente, per ora nessun legame con il mezzo.
+- Percorrenze (`scheda_percorrenze(cant)`, usata dagli operatori e nella scheda "Percorrenze" dell'ufficio): tutte le gite attive del cantiere, ricerca per nome, "Avvia navigazione". Versione usata: `versione_operatori()` = versione fissata (`pubblicata`) se presente, altrimenti l'ultima. Per scelta dell'utente non serve pubblicare, e nessun legame con il mezzo.
+- Storico: "Fissa la versione N per gli operatori" (`Archivio.pubblica`) e "Usa sempre l'ultima versione" (`Archivio.sblocca`).
 - Guida (`guida/index.html`, componente `guida_percorsi`, `pagina_guida()` con `st.session_state.guida = (id, versione)`): usa GPS (`watchPosition`) e Wake Lock, permessi concessi agli iframe dei componenti Streamlit. Avanzamento lungo la **sequenza**: `migliore()` cerca il tratto in una finestra da pos-60 m a pos+450 m e, tra tratti ugualmente vicini (ripassi), sceglie il primo non superato; salto in avanti dopo 3 posizioni concordi; fuori percorso oltre 35 m. Svolte da variazione di rotta ≥ 35°, voce con speechSynthesis it-IT. Avanzamento salvato in localStorage per gita, versione e giorno. **Nessun dato di posizione viene inviato al server**: non aggiungere invii senza l'accordo art. 4 e la DPIA.
 - Dallo Storico, "Prova la navigazione" apre la guida per qualsiasi ruolo; "Prova senza GPS" simula il percorso.
 

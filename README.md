@@ -29,7 +29,7 @@ Ogni gita appartiene a un cantiere e a un mezzo; un mezzo può avere più gite (
 
 ## Archivio gite
 
-Nella scheda **Archivio gite** si sceglie il cantiere e si vedono tutte le gite con il loro stato: progetto in corso, conclusa da pubblicare, in strada (con la versione pubblicata), nel cestino. Si selezionano con la casella a sinistra e si può: spostarle nel cestino, ripristinarle, scaricarne i GPX in uno zip. L'**eliminazione definitiva** (della gita e di tutte le sue versioni) è riservata all'amministratore e vale solo per le gite già nel cestino.
+Nella scheda **Archivio gite** si sceglie il cantiere e si vedono tutte le gite con il loro stato: attiva (eventualmente con la versione fissata per gli operatori), progetto in corso, nel cestino. Si selezionano con la casella a sinistra e si può: spostarle nel cestino, ripristinarle, scaricarne i GPX in uno zip. L'**eliminazione definitiva** (della gita e di tutte le sue versioni) è riservata all'amministratore e vale solo per le gite già nel cestino.
 
 ## Creare gite senza GPX (scheda "Nuove gite")
 
@@ -40,7 +40,7 @@ Nella scheda **Nuove gite** si sceglie il cantiere e si apre l'**area di progett
 3. aggiungi i punti d'interesse;
 4. **Salva bozza** per salvare sul server e riprendere quando vuoi, **Concludi la gita** quando è finita.
 
-I progetti in corso sono gite con stato "bozza": stanno sul server, li vedono i colleghi del cantiere, ma non compaiono nell'editor delle gite, nello storico né agli operatori. Concludendo, la gita passa tra quelle del cantiere, pronta per essere assegnata e pubblicata.
+I progetti in corso sono gite con stato "bozza": stanno sul server, li vedono i colleghi del cantiere, ma non compaiono nell'editor delle gite, nello storico né agli operatori. Concludendo, la gita passa tra quelle del cantiere e gli operatori la vedono subito.
 
 ## Punti d'interesse e note
 
@@ -53,7 +53,7 @@ Punti e note vengono salvati nel GPX della gita come waypoint, insieme al percor
 
 ## Navigazione per gli operatori
 
-L'operatore entra dal telefono, vede le gite **pubblicate** del suo cantiere (con ricerca per nome) e preme **Avvia navigazione**. La guida si apre a tutto schermo:
+L'operatore entra dal telefono, vede **tutte le gite attive** del suo cantiere (con ricerca per nome) e preme **Avvia navigazione**. Anche l'ufficio ha la stessa vista nella scheda **Percorrenze**. La guida si apre a tutto schermo:
 
 - indicazione della prossima svolta, anche a voce ("Gira a destra tra 80 metri", "Inversione a U");
 - tratti già percorsi in verde, prossimi 300 metri in arancione, percentuale di avanzamento;
@@ -66,11 +66,11 @@ L'operatore entra dal telefono, vede le gite **pubblicate** del suo cantiere (co
 
 Dall'ufficio, nella scheda Storico versioni, **Prova la navigazione** apre la stessa guida; con **Prova senza GPS** la gita scorre da sola (utile anche come ripasso per i sostituti). Il pulsante **GPX** resta disponibile per chi preferisce un'altra app, come OsmAnd.
 
-## Pubblicazione e pagina per gli operatori
+## Versione usata dagli operatori
 
-Una correzione inviata non arriva subito sul mezzo. Un responsabile o l'amministratore la **pubblica** dalla scheda Storico versioni (oppure in blocco dalla scheda Flotta): da quel momento è la versione che vedono gli operatori.
+Gli operatori vedono sempre l'**ultima versione** di ogni gita attiva del cantiere. Se serve rifare una gita senza disturbare chi è in strada, dalla scheda Storico versioni si può **fissare una versione per gli operatori**: continueranno a usare quella finché non si sceglie **Usa sempre l'ultima versione**.
 
-Per ora l'operatore vede tutte le gite pubblicate del cantiere, senza legame con il mezzo (il mezzo abituale nella scheda Utenti resta disponibile per sviluppi futuri).
+Per ora l'operatore vede tutte le gite attive del cantiere, senza legame con il mezzo (il mezzo abituale nella scheda Utenti resta disponibile per sviluppi futuri).
 
 ## Come funziona per chi lo usa
 

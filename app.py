@@ -308,7 +308,7 @@ def gestisci(risposta, dest_cantiere: str | None, dest_mezzo: str | None) -> Non
                 if dest_mezzo and not archivio.meta(gid).get("mezzo"):
                     archivio.assegna(gid, utente, mezzo=dest_mezzo)
                 archivio.concludi(gid, utente)
-                testo = f"Gita \"{nome}\" conclusa: la trovi nel portale, scheda Editor, pronta per essere pubblicata"
+                testo = f"Gita \"{nome}\" conclusa: ora è tra le gite del cantiere e gli operatori la vedono"
             avviso(testo or "Nessuna modifica", nonce=nonce)
         elif azione == "create":
             nuovo = archivio.crea(nome, risposta["pts"], utente,
@@ -348,22 +348,21 @@ def pagina_crea():
     st.markdown("<style>[data-testid='stSidebar'],[data-testid='stSidebarCollapsedControl'],"
                 "[data-testid='stExpandSidebarButton']{display:none!important}"
                 ".block-container{padding-top:2.4rem!important}</style>", unsafe_allow_html=True)
-    testa = st.columns([3.2, 2, 2, 1.5], vertical_alignment="bottom")
-    testa[0].markdown("<div class='titolo-pagina'><b>Area di progettazione</b>"
-                      "<span>disegna il percorso e i punti d'interesse</span></div>", unsafe_allow_html=True)
-    separata = st.session_state.get("finestra_separata")
-    if testa[3].button("Vai al portale" if separata else "← Torna al portale", width="stretch",
-                       help="Quando hai salvato puoi anche chiudere questa finestra" if separata else None):
+    testa = st.columns([1.3, 3, 2, 2], vertical_alignment="bottom")
+    if testa[0].button("🏠  Home", type="primary", width="stretch",
+                       help="Torna al portale. Salva prima la bozza: le modifiche non salvate restano solo su questo computer"):
         st.session_state.pagina = None
         st.session_state.finestra_separata = False
         st.rerun()
+    testa[1].markdown("<div class='titolo-pagina'><b>Area di progettazione</b>"
+                      "<span>disegna il percorso e i punti d'interesse</span></div>", unsafe_allow_html=True)
     iniziale = st.session_state.pop("crea_cantiere_iniziale", None)
     if iniziale in miei_cantieri:
         st.session_state.crea_cantiere = iniziale
-    cant = testa[1].selectbox("Cantiere", miei_cantieri, format_func=nome_cantiere, key="crea_cantiere",
+    cant = testa[2].selectbox("Cantiere", miei_cantieri, format_func=nome_cantiere, key="crea_cantiere",
                               index=miei_cantieri.index(cantiere_sel) if cantiere_sel in miei_cantieri else 0)
     mezzi = [None] + an.mezzi_del_cantiere(flotte, cant, solo_attivi=True)
-    mez = testa[2].selectbox("Mezzo", mezzi, key=f"crea_mezzo_{cant}",
+    mez = testa[3].selectbox("Mezzo", mezzi, key=f"crea_mezzo_{cant}",
                              format_func=lambda k: "Da decidere" if not k else an.etichetta_mezzo(flotte, k))
     bozze = sorted([m for m in archivio.elenco(bozze=True) if m.get("cantiere") == cant], key=lambda m: m["nome"].lower())
     risposta = editor(data=dati_per_editor(bozze), data_version=f"{archivio.impronta()}|crea|{cant}", user=utente,
@@ -401,16 +400,12 @@ def scheda_storico():
     c4.metric("Trasferimento", f"{ultima['km_trasferimento']:.1f} km".replace(".", ","))
     pub = m.get("pubblicata")
     if pub:
-        testo = (f"Approvata per la strada: versione {pub['n']}, pubblicata da {pub['autore']} "
-                 f"il {data_breve(pub['data'])}.")
-        if pub["n"] != ultima["n"]:
-            st.warning(testo + f" La versione {ultima['n']} non è ancora pubblicata: gli operatori vedono la {pub['n']}.")
-        else:
-            st.success(testo)
+        st.warning(f"Gli operatori usano la versione {pub['n']}, fissata da {pub['autore']} il {data_breve(pub['data'])}."
+                   + (f" La versione {ultima['n']} non la vedono." if pub["n"] != ultima["n"] else ""))
     else:
-        st.info("Non ancora pubblicata: gli operatori non vedono questa gita.")
+        st.success(f"Gli operatori vedono sempre l'ultima versione (ora la {ultima['n']}).")
     st.dataframe(
-        [{"Versione": v["n"], "Stato": "Pubblicata" if pub and pub["n"] == v["n"] else "",
+        [{"Versione": v["n"], "Operatori": "✓" if v["n"] == versione_operatori(m) else "",
           "Data": data_breve(v["data"]), "Autore": v["autore"], "Nota": v["nota"],
           "Km": v["km_tot"], "Punti": v["punti"], "Note sulla mappa": v.get("note_mappa", 0)}
          for v in reversed(m["versioni"])],
@@ -433,11 +428,18 @@ def scheda_storico():
             nuova = archivio.ripristina(m["id"], n, utente)
             avviso(f"La versione {n} è tornata attuale come versione {nuova}")
             st.rerun()
-        if not mostra_archiviate and col_pub.button(f"Pubblica la versione {n}", type="primary", width="stretch",
-                                                    disabled=not modificabile or bool(pub and pub["n"] == n),
-                                                    help="Diventa la versione che vedono gli operatori"):
+        if not mostra_archiviate and pub:
+            if col_pub.button("Usa sempre l'ultima versione", width="stretch", disabled=not modificabile,
+                              help="Gli operatori vedranno ogni nuova versione appena salvata"):
+                archivio.sblocca(m["id"], utente)
+                avviso(f"{m['nome']}: gli operatori vedono l'ultima versione")
+                st.rerun()
+        elif not mostra_archiviate and col_pub.button(f"Fissa la versione {n} per gli operatori", width="stretch",
+                                                      disabled=not modificabile,
+                                                      help="Utile se stai rifacendo la gita: gli operatori continuano "
+                                                           "a usare questa versione finché non la sblocchi"):
             archivio.pubblica(m["id"], n, utente)
-            avviso(f"{m['nome']}: pubblicata la versione {n}")
+            avviso(f"{m['nome']}: gli operatori usano la versione {n}")
             st.rerun()
     except (ErroreArchivio, ValueError) as e:
         st.error(str(e))
@@ -561,9 +563,9 @@ def scheda_flotta():
                "N. gita": st.column_config.NumberColumn(min_value=1, max_value=20, step=1),
                "Turno": st.column_config.SelectboxColumn(options=an.TURNI),
                "Giorni": st.column_config.TextColumn(help="Lun-Sab, Lun Mer Ven, Tutti i giorni"),
-               "Pubblicata": st.column_config.TextColumn(disabled=True, help="Versione che vedono gli operatori")}
+               "Operatori": st.column_config.TextColumn(disabled=True, help="Versione che vedono gli operatori")}
     dati = [{"id": m["id"], "Gita": m["nome"], "Mezzo": per_id.get(m.get("mezzo")), "N. gita": m.get("numero"),
-             "Turno": m.get("turno"), "Giorni": an.scrivi_giorni(m.get("giorni")), "Pubblicata": stato_pubblicazione(m)}
+             "Turno": m.get("turno"), "Giorni": an.scrivi_giorni(m.get("giorni")), "Operatori": stato_pubblicazione(m)}
             for m in gite]
     if amministratore:
         colonne["Cantiere"] = st.column_config.SelectboxColumn(options=sorted(cantieri_nomi),
@@ -586,30 +588,18 @@ def scheda_flotta():
         except (ValueError, ErroreArchivio) as e:
             st.error(str(e))
 
-    da_pubblicare = [m for m in gite if (m.get("pubblicata") or {}).get("n") != m["versioni"][-1]["n"]]
-    if da_pubblicare:
-        with st.expander(f"Pubblicazione rapida: {len(da_pubblicare)} gite con una versione non pubblicata"):
-            st.write("Pubblica in un colpo l'ultima versione di queste gite. Fallo solo se le hai controllate: "
-                     "da quel momento sono quelle che vedono gli operatori.")
-            st.caption(", ".join(m["nome"] for m in da_pubblicare))
-            conferma = st.checkbox("Le ho controllate")
-            if st.button("Pubblica le ultime versioni", disabled=not conferma):
-                try:
-                    for m in da_pubblicare:
-                        archivio.pubblica(m["id"], m["versioni"][-1]["n"], utente)
-                    salvato(f"Pubblicate {len(da_pubblicare)} gite")
-                except (ValueError, ErroreArchivio) as e:
-                    st.error(str(e))
-
 
 def stato_pubblicazione(m: dict) -> str:
     pub, ultima = m.get("pubblicata"), m["versioni"][-1]["n"]
-    if not pub:
-        return "No"
-    return f"v{pub['n']}" + (f" (ultima v{ultima})" if pub["n"] != ultima else "")
+    return f"v{pub['n']} fissata" if pub else f"ultima (v{ultima})"
 
 
 # ================================================================ nuove gite e archivio
+
+def versione_operatori(m: dict) -> int:
+    """Gli operatori usano la versione fissata, se c'è, altrimenti sempre l'ultima."""
+    return (m.get("pubblicata") or {}).get("n") or m["versioni"][-1]["n"]
+
 
 def stato_gita(m: dict) -> str:
     if m.get("archiviata"):
@@ -617,9 +607,9 @@ def stato_gita(m: dict) -> str:
     if m.get("stato") == "bozza":
         return "Progetto in corso"
     pub, ultima = m.get("pubblicata"), m["versioni"][-1]["n"]
-    if not pub:
-        return "Conclusa, da pubblicare"
-    return f"In strada (v{pub['n']})" + (f", v{ultima} da pubblicare" if pub["n"] != ultima else "")
+    if pub and pub["n"] != ultima:
+        return f"Attiva, operatori fissati alla v{pub['n']} (ultima v{ultima})"
+    return "Attiva"
 
 
 def scheda_nuove_gite():
@@ -639,7 +629,7 @@ def scheda_nuove_gite():
         st.rerun()
     st.caption("Nell'area di progettazione disegni il percorso, aggiungi i punti d'interesse e salvi la bozza. "
                "I progetti salvati restano qui sotto finché non li concludi: a quel punto passano tra le gite del "
-               "cantiere, pronti per essere pubblicati.")
+               "cantiere e gli operatori li vedono subito.")
     bozze = [m for m in archivio.elenco(bozze=True) if m.get("cantiere") == cant]
     st.subheader(f"Progetti in corso: {len(bozze)}")
     if not bozze:
@@ -662,20 +652,19 @@ def scheda_archivio():
     if not opzioni:
         st.info("Non hai cantieri assegnati.")
         return
-    st.markdown("<div class='titolo-pagina'><b>Archivio gite</b><span>tutti i file del cantiere: progetti, gite "
-                "concluse, gite in strada e cestino</span></div>", unsafe_allow_html=True)
+    st.markdown("<div class='titolo-pagina'><b>Archivio gite</b><span>tutti i file del cantiere: gite attive, "
+                "progetti in corso e cestino</span></div>", unsafe_allow_html=True)
     c1, c2 = st.columns([1, 2])
     cant = c1.selectbox("Cantiere", opzioni, format_func=nome_cantiere, key="arch_cantiere",
                         index=opzioni.index(cantiere_sel) if cantiere_sel in opzioni else 0)
-    filtro = c2.segmented_control("Mostra", ["Tutte", "Progetti in corso", "Concluse", "In strada", "Nel cestino"],
+    filtro = c2.segmented_control("Mostra", ["Tutte", "Attive", "Progetti in corso", "Nel cestino"],
                                   default="Tutte", key="arch_filtro")
     def del_cantiere(m):
         return (m.get("cantiere") is None or m.get("cantiere") not in flotte["cantieri"]) if cant == SENZA \
             else m.get("cantiere") == cant
     tutte = [m for m in archivio.tutte() if del_cantiere(m)]
     filtri = {"Progetti in corso": lambda m: stato_gita(m) == "Progetto in corso",
-              "Concluse": lambda m: stato_gita(m) == "Conclusa, da pubblicare",
-              "In strada": lambda m: stato_gita(m).startswith("In strada"),
+              "Attive": lambda m: stato_gita(m).startswith("Attiva"),
               "Nel cestino": lambda m: stato_gita(m) == "Nel cestino"}
     gite = [m for m in tutte if filtri.get(filtro or "Tutte", lambda m: True)(m)]
     if not gite:
@@ -800,23 +789,22 @@ def scheda_utenti():
 
 # ================================================================ operatori
 
-def scheda_operatore():
-    st.markdown(f"<div class='titolo-pagina'><b>Gite di {nome_cantiere(cantiere_sel)}</b>"
+def scheda_percorrenze(cant: str):
+    st.markdown(f"<div class='titolo-pagina'><b>Gite di {nome_cantiere(cant)}</b>"
                 "<span>scegli la gita e avvia la navigazione</span></div>", unsafe_allow_html=True)
-    gite = sorted([m for m in archivio.elenco() if m.get("cantiere") == cantiere_sel and m.get("pubblicata")],
-                  key=lambda m: m["nome"].lower())
+    gite = sorted([m for m in archivio.elenco() if m.get("cantiere") == cant], key=lambda m: m["nome"].lower())
     if not gite:
-        st.info("In questo cantiere non ci sono ancora gite pronte per la strada. "
-                "Chiedi al responsabile di pubblicarle.")
+        st.info("In questo cantiere non ci sono ancora gite.")
         return
-    cerca = st.text_input("Cerca", placeholder="Cerca una gita per nome", label_visibility="collapsed")
+    cerca = st.text_input("Cerca", placeholder="Cerca una gita per nome", label_visibility="collapsed",
+                          key=f"cerca_{cant}")
     if cerca.strip():
         gite = [m for m in gite if cerca.strip().lower() in m["nome"].lower()]
         if not gite:
             st.write("Nessuna gita con questo nome.")
     for m in gite:
-        pub = m["pubblicata"]
-        v = next(x for x in m["versioni"] if x["n"] == pub["n"])
+        n = versione_operatori(m)
+        v = next(x for x in m["versioni"] if x["n"] == n)
         with st.container(border=True):
             st.markdown(f"**{m['nome']}**")
             dettagli = [f"{v['km_tot']:.1f} km".replace(".", ",")]
@@ -825,11 +813,24 @@ def scheda_operatore():
             st.caption(", ".join(dettagli))
             c1, c2 = st.columns([3, 1])
             if c1.button("▶  Avvia navigazione", key=f"nav_{m['id']}", type="primary", width="stretch"):
-                st.session_state.guida = (m["id"], pub["n"])
+                st.session_state.guida = (m["id"], n)
                 st.rerun()
-            c2.download_button("GPX", data=archivio.gpx(m["id"], pub["n"]), key=f"dl_{m['id']}",
+            c2.download_button("GPX", data=archivio.gpx(m["id"], n), key=f"dl_{m['id']}",
                                file_name=f"{m['nome']}.gpx".replace(" ", "_"), mime="application/gpx+xml",
                                width="stretch", help="Per aprire la gita in un'altra app, per esempio OsmAnd")
+
+
+def scheda_operatore():
+    scheda_percorrenze(cantiere_sel)
+
+
+def scheda_percorrenze_ufficio():
+    if not miei_cantieri:
+        st.info("Non hai cantieri assegnati.")
+        return
+    cant = st.selectbox("Cantiere", miei_cantieri, format_func=nome_cantiere, key="perc_cantiere",
+                        index=miei_cantieri.index(cantiere_sel) if cantiere_sel in miei_cantieri else 0)
+    scheda_percorrenze(cant)
 
 
 def pagina_guida(gid: str, n: int):
@@ -843,7 +844,7 @@ def pagina_guida(gid: str, n: int):
     except (FileNotFoundError, StopIteration, ValueError):
         st.session_state.pop("guida", None)
         st.rerun()
-    if st.button("← Torna alle gite"):
+    if st.button("🏠  Torna alle gite"):
         st.session_state.pop("guida", None)
         st.rerun()
     risposta = guida(gita={"id": gid, "version": n, "name": m["nome"], "pts": pts, "wpts": wpts},
@@ -863,8 +864,11 @@ elif ruolo == "operatore":
 elif st.session_state.get("pagina") == "crea" and miei_cantieri:
     pagina_crea()
 else:
-    nomi = ["Editor", "Nuove gite", "Archivio gite", "Storico versioni", "Flotta"] + (["Utenti"] if amministratore else [])
+    nomi = ["Percorrenze", "Editor", "Nuove gite", "Archivio gite", "Storico versioni", "Flotta"] + \
+        (["Utenti"] if amministratore else [])
     schede = dict(zip(nomi, st.tabs(nomi)))
+    with schede["Percorrenze"]:
+        scheda_percorrenze_ufficio()
     with schede["Editor"]:
         scheda_editor()
     with schede["Nuove gite"]:

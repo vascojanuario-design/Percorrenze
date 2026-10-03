@@ -530,6 +530,18 @@ class Archivio:
             paths = [f"{cartella}/meta.json"] + [f"{cartella}/{v['file']}" for v in m["versioni"]]
             self.d.cancella(paths, f"{m['nome']}: eliminata definitivamente", autore)
 
+    def sblocca(self, gid: str, autore: str) -> None:
+        """Gli operatori torneranno a vedere sempre l'ultima versione."""
+        with self.d.lock:
+            self.d.aggiorna(forza=True)
+            m = self.meta(gid)
+            if not m.pop("pubblicata", None):
+                return
+            m.setdefault("eventi", []).append({"data": _adesso(), "autore": autore,
+                                              "azione": "gli operatori usano l'ultima versione"})
+            self.d.scrivi({f"{self._cartella(gid)}/meta.json": json.dumps(m, ensure_ascii=False, indent=2)},
+                          f"{m['nome']}: versione per gli operatori sbloccata", autore)
+
     def pubblica(self, gid: str, n: int, autore: str) -> None:
         """Approva la versione n per la strada: è quella che vedranno gli operatori."""
         with self.d.lock:

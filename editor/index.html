@@ -147,7 +147,7 @@ body:not(.modo-crea) #altre>summary{display:none}
     <div class="foot solo-crea"><button id="newg" class="primary">+ Nuovo progetto</button></div>
   </section>
   <section id="empty"><p class="help solo-editor">Seleziona una gita dall'elenco o cliccala sulla mappa per correggerla. Le modifiche restano una bozza su questo computer finché non le invii al server.</p>
-    <p class="help solo-crea">Riprendi un progetto in corso dall'elenco, oppure premi <b>+ Nuovo progetto</b> per iniziare una gita da zero. I progetti salvati restano sul server: li ritrovi da qualsiasi computer e li vedono anche i colleghi del cantiere, ma non arrivano agli operatori finché la gita non è conclusa e pubblicata.</p></section>
+    <p class="help solo-crea">Riprendi un progetto in corso dall'elenco, oppure premi <b>+ Nuovo progetto</b> per iniziare una gita da zero. I progetti salvati restano sul server: li ritrovi da qualsiasi computer e li vedono anche i colleghi del cantiere, ma non arrivano agli operatori finché la gita non è conclusa.</p></section>
   <section id="act" hidden>
     <input id="name" aria-label="Nome della gita" placeholder="Zona, mezzo, turno, numero gita">
     <div id="stats"></div>
@@ -695,7 +695,7 @@ function invia(stato){
 $('#send').onclick=()=>invia(null);
 $('#salvab').onclick=()=>invia('bozza');
 $('#conclude').onclick=()=>{
-  if(!confirm('Concludere "'+act.name+'"?\n\nLa gita esce dai progetti in corso e passa tra le gite del cantiere, dove potrai assegnarla e pubblicarla per gli operatori.'))return;
+  if(!confirm('Concludere "'+act.name+'"?\n\nLa gita esce dai progetti in corso e passa tra le gite del cantiere: da quel momento gli operatori la vedono e possono avviarla.'))return;
   invia('concludi');
 };
 document.querySelectorAll('#mtools [data-t]').forEach(b=>b.onclick=()=>$('#'+b.dataset.t).click());
