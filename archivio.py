@@ -78,6 +78,46 @@ def leggi_gpx(contenuto: bytes, nome_file: str = "") -> tuple[str, list[Punto]]:
     return nome or Path(nome_file).stem, punti
 
 
+TIPI_WAYPOINT = {
+    "cassonetto": "Cassonetti / raccolta",
+    "utenza": "Utenza critica",
+    "attenzione": "Attenzione",
+    "accesso": "Accesso",
+    "nota": "Nota",
+}
+
+
+def leggi_waypoint(contenuto: bytes) -> list[dict]:
+    """Punti e note della gita (<wpt> del GPX): [{lat, lon, tipo, testo}]."""
+    try:
+        radice = ET.fromstring(contenuto)
+    except ET.ParseError:
+        return []
+    out = []
+    for w in (el for el in radice if _locale(el.tag) == "wpt"):
+        campi = {_locale(c.tag): (c.text or "").strip() for c in w}
+        tipo = campi.get("type", "").lower()
+        out.append({"lat": float(w.get("lat")), "lon": float(w.get("lon")),
+                    "tipo": tipo if tipo in TIPI_WAYPOINT else "nota",
+                    "testo": campi.get("desc") or campi.get("name") or ""})
+    return pulisci_waypoint(out)
+
+
+def pulisci_waypoint(waypoint: list[dict] | None) -> list[dict]:
+    out = []
+    for w in waypoint or []:
+        try:
+            lat, lon = float(w["lat"]), float(w["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+            continue
+        tipo = w.get("tipo") if w.get("tipo") in TIPI_WAYPOINT else "nota"
+        out.append({"lat": round(lat, 6), "lon": round(lon, 6), "tipo": tipo,
+                    "testo": str(w.get("testo") or "").strip()[:300]})
+    return out
+
+
 def distanza(a: Punto, b: Punto) -> float:
     r = math.pi / 180
     dl, dn = (b[0] - a[0]) * r, (b[1] - a[1]) * r
@@ -110,15 +150,19 @@ def lunghezze(punti: list[Punto]) -> dict:
             "km_trasferimento": round(trasf / 1000, 2)}
 
 
-def scrivi_gpx(nome: str, punti: list[Punto], descrizione: str = "") -> str:
-    """GPX 1.1 con un trkseg per ogni tratto omogeneo e il tipo nelle estensioni."""
+def scrivi_gpx(nome: str, punti: list[Punto], descrizione: str = "", waypoint: list[dict] | None = None) -> str:
+    """GPX 1.1: punti e note come <wpt>, poi un trkseg per ogni tratto omogeneo con il tipo nelle estensioni."""
     righe = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<gpx version="1.1" creator="Percorsi" xmlns="http://www.topografix.com/GPX/1/1" xmlns:p="urn:percorsi:1">',
         f"  <metadata><name>{escape(nome)}</name><desc>{escape(descrizione)}</desc>"
         f"<time>{_adesso()}</time></metadata>",
-        f"  <trk><name>{escape(nome)}</name>",
     ]
+    for w in pulisci_waypoint(waypoint):
+        etichetta = w["testo"][:40] or TIPI_WAYPOINT[w["tipo"]]
+        righe.append(f'  <wpt lat="{w["lat"]:.6f}" lon="{w["lon"]:.6f}"><name>{escape(etichetta)}</name>'
+                     f'<desc>{escape(w["testo"])}</desc><type>{w["tipo"]}</type></wpt>')
+    righe.append(f"  <trk><name>{escape(nome)}</name>")
     inizio = 0
     for i in range(1, len(punti)):
         if i == len(punti) - 1 or punti[i][2] != punti[inizio][2]:
@@ -323,7 +367,15 @@ class Archivio:
         m = self.meta(gid)
         v = m["versioni"][-1] if n is None else next(v for v in m["versioni"] if v["n"] == n)
         _, pts = leggi_gpx(self.d.leggi(f"{self._cartella(gid)}/{v['file']}"), v["file"])
-        return pts
+        return pulisci(pts)[0]
+
+    def contenuto(self, gid: str, n: int | None = None) -> tuple[list[Punto], list[dict]]:
+        """Percorso e punti/note di una versione (l'ultima se n è None)."""
+        m = self.meta(gid)
+        v = m["versioni"][-1] if n is None else next(v for v in m["versioni"] if v["n"] == n)
+        dati = self.d.leggi(f"{self._cartella(gid)}/{v['file']}")
+        _, pts = leggi_gpx(dati, v["file"])
+        return pulisci(pts)[0], leggi_waypoint(dati)
 
     def gpx(self, gid: str, n: int) -> str:
         v = next(v for v in self.meta(gid)["versioni"] if v["n"] == n)
@@ -338,22 +390,23 @@ class Archivio:
 
     # --- scrittura
 
-    def _nuova_versione(self, m: dict, punti: list[Punto], autore: str, nota: str, nonce: str | None) -> dict:
+    def _nuova_versione(self, m: dict, punti: list[Punto], autore: str, nota: str, nonce: str | None,
+                        waypoint: list[dict] | None = None) -> dict:
         n = m["versioni"][-1]["n"] + 1 if m["versioni"] else 1
         file = f"v{n:03d}.gpx"
         v = {"n": n, "file": file, "data": _adesso(), "autore": autore, "nota": nota, "nome": m["nome"],
-             "punti": len(punti), **lunghezze(punti)}
+             "punti": len(punti), "note_mappa": len(pulisci_waypoint(waypoint)), **lunghezze(punti)}
         if nonce:
             v["invio"] = nonce
         m["versioni"].append(v)
         cartella = self._cartella(m["id"])
-        self.d.scrivi({f"{cartella}/{file}": scrivi_gpx(m["nome"], punti, f"Versione {n}: {nota}"),
+        self.d.scrivi({f"{cartella}/{file}": scrivi_gpx(m["nome"], punti, f"Versione {n}: {nota}", waypoint),
                        f"{cartella}/meta.json": json.dumps(m, ensure_ascii=False, indent=2)},
                       f"{m['nome']}: versione {n} - {nota}", autore)
         return v
 
     def crea(self, nome: str, punti: list[Punto], autore: str, nota: str, nonce: str | None = None,
-             cantiere: str | None = None, mezzo: str | None = None) -> str:
+             cantiere: str | None = None, mezzo: str | None = None, waypoint: list[dict] | None = None) -> str:
         punti, _ = pulisci(punti)
         if len(punti) < 2:
             raise ValueError("Una gita deve avere almeno due punti")
@@ -362,11 +415,11 @@ class Archivio:
             gid = f"{_slug(nome)}-{uuid.uuid4().hex[:6]}"
             m = {"id": gid, "nome": nome.strip() or "Gita senza nome", "creata": _adesso(), "creata_da": autore,
                  "archiviata": False, "cantiere": cantiere, "mezzo": mezzo, "versioni": []}
-            self._nuova_versione(m, punti, autore, nota, nonce)
+            self._nuova_versione(m, punti, autore, nota, nonce, waypoint)
         return gid
 
     def salva(self, gid: str, punti: list[Punto], autore: str, nota: str, base: int, nome: str | None = None,
-              nonce: str | None = None) -> int:
+              nonce: str | None = None, waypoint: list[dict] | None = None) -> int:
         """Salva una nuova versione. Rifiuta se nel frattempo qualcuno ha inviato una versione più recente."""
         punti, _ = pulisci(punti)
         if len(punti) < 2:
@@ -379,14 +432,14 @@ class Archivio:
                 raise Conflitto(attuale)
             if nome and nome.strip():
                 m["nome"] = nome.strip()
-            return self._nuova_versione(m, punti, autore, nota, nonce)["n"]
+            return self._nuova_versione(m, punti, autore, nota, nonce, waypoint)["n"]
 
     def ripristina(self, gid: str, n: int, autore: str) -> int:
         with self.d.lock:
             self.d.aggiorna(forza=True)
-            punti = self.punti(gid, n)
+            punti, waypoint = self.contenuto(gid, n)
             m = self.meta(gid)
-            return self._nuova_versione(m, punti, autore, f"Ripristinata la versione {n}", None)["n"]
+            return self._nuova_versione(m, punti, autore, f"Ripristinata la versione {n}", None, waypoint)["n"]
 
     def archivia(self, gid: str, autore: str, archiviata: bool = True) -> None:
         with self.d.lock:

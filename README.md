@@ -27,6 +27,15 @@ Gli altri utenti si creano dalla scheda **Utenti**. Ognuno può cambiare la prop
 
 Ogni gita appartiene a un cantiere e a un mezzo; un mezzo può avere più gite (gita 1, 2, 3…), ognuna con turno e giorni. Si gestisce tutto dalla scheda **Flotta**, scegliendo il cantiere nella barra laterale. Le gite importate senza cantiere compaiono all'amministratore sotto "Senza cantiere", da dove si assegnano.
 
+## Disegnare gite e aggiungere punti e note
+
+Nell'editor, sezione **Disegno, punti e note**:
+
+- **Nuova gita da disegnare** (sotto l'elenco delle gite) crea una gita vuota: dai un nome e clicca sulla mappa, ogni clic aggiunge un punto. Con **Disegna percorso** si allunga anche una gita esistente; se è selezionato un punto, i nuovi vengono inseriti subito dopo. **Esc** termina, **Annulla** toglie l'ultimo punto.
+- **Aggiungi punto o nota**: clic sulla mappa, poi scegli il tipo (cassonetti, utenza critica, attenzione, accesso, nota) e scrivi il testo. I punti si trascinano e si eliminano come quelli del percorso.
+
+Punti e note vengono salvati nel GPX della gita come waypoint, insieme al percorso e con lo stesso storico delle versioni. OsmAnd li mostra sulla mappa quando l'operatore apre il giro.
+
 ## Pubblicazione e pagina per gli operatori
 
 Una correzione inviata non arriva subito sul mezzo. Un responsabile o l'amministratore la **pubblica** dalla scheda Storico versioni (oppure in blocco dalla scheda Flotta): da quel momento è la versione che vedono gli operatori.

@@ -47,6 +47,8 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 - La sessione vive in `st.session_state`: ricaricando la pagina si rientra.
 - Pubblicazione: `meta.json` ha `pubblicata` = {n, data, autore}, impostato con `Archivio.pubblica()`. Gli operatori vedono solo la versione pubblicata, mai l'ultima bozza.
 - Utenti: campo `mezzo` (mezzo abituale, deve appartenere a uno dei cantieri dell'utente, `controlla_mezzo`).
+- Punti e note: `<wpt>` nel GPX con `<name>`, `<desc>` (testo) e `<type>` (cassonetto, utenza, attenzione, accesso, nota: `TIPI_WAYPOINT` in archivio.py, `TIPI_WP` nell'editor, devono coincidere). `Archivio.contenuto()` restituisce (punti, waypoint); ogni versione registra `note_mappa`. Nell'editor stanno in `g.wp`, sono incluse in annulla/ripeti, bozze e invio (`wpts`).
+- Disegno: `modo` = 'disegna' | 'punto' | null; `clickMappa()` aggiunge punti alla fine o dopo il punto selezionato. "Nuova gita da disegnare" crea una gita locale vuota (le funzioni gestiscono gite con 0 o 1 punto).
 - Pagina operatore: gite pubblicate del mezzo per il giorno (fuso Europe/Rome, `an.adesso()`), ordinate per turno e numero; sostituzione giornaliera in `st.session_state.sostituzione` = (data, mezzo).
 
 ### Punti e tratti
@@ -86,7 +88,9 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 
 ## Prossimi passi, in ordine
 
-Fatto: accessi con ruoli, cantieri, mezzi, assegnazione delle gite (mezzo, numero, turno, giorni), pubblicazione delle versioni, mezzo abituale degli operatori, vista "Oggi" con sostituzioni.
+Fatto: accessi con ruoli, cantieri, mezzi, assegnazione delle gite (mezzo, numero, turno, giorni), pubblicazione delle versioni, mezzo abituale degli operatori, vista "Oggi" con sostituzioni, punti e note sulla mappa (waypoint), disegno di gite da zero.
+
+Prossimo nel portale: **foglio di marcia** in PDF (elenco vie nell'ordine di percorrenza, note, mappa) per sostituti e affiancamenti; poi accesso che resta ricaricando la pagina e nome automatico delle gite.
 
 Telefoni degli operatori: Samsung e Redmi (Android), personali o assegnati alla persona; il mezzo è legato alla persona.
 

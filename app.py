@@ -13,7 +13,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import anagrafica as an
-from archivio import Conflitto, ErroreArchivio, apri, leggi_gpx, pulisci
+from archivio import Conflitto, ErroreArchivio, apri, leggi_gpx, leggi_waypoint, pulisci
 
 BASE = Path(__file__).parent
 DATA_DIR = Path(os.environ.get("PERCORSI_DATA_DIR", BASE / "dati"))
@@ -165,7 +165,8 @@ with st.sidebar:
                     pts, rimossi = pulisci(pts)
                     archivio.crea(nome, pts, utente,
                                   f"Importata da {f.name}" + (f", rimossi {rimossi} punti doppi" if rimossi else ""),
-                                  cantiere=dest, mezzo=mezzo_sel if mezzo_sel not in (TUTTI, SENZA) else None)
+                                  cantiere=dest, mezzo=mezzo_sel if mezzo_sel not in (TUTTI, SENZA) else None,
+                                  waypoint=leggi_waypoint(f.getvalue()))
                     avviso(f"Importata: {nome}")
                 except (ValueError, ErroreArchivio) as e:
                     avviso(str(e), ok=False)
@@ -224,9 +225,9 @@ def ordine(m: dict):
 attive = sorted([m for m in archivio.elenco() if nel_filtro(m)], key=ordine)
 
 
-@st.cache_data(show_spinner=False, max_entries=20)
-def punti_ultima(gid: str, versione: int) -> list:
-    return archivio.punti(gid, versione)
+@st.cache_data(show_spinner=False, max_entries=50)
+def contenuto_versione(gid: str, versione: int) -> tuple[list, list]:
+    return archivio.contenuto(gid, versione)
 
 
 def scheda_editor():
@@ -234,8 +235,9 @@ def scheda_editor():
     dati = []
     for m in attive:
         ultima = m["versioni"][-1]
+        pts, wpts = contenuto_versione(m["id"], ultima["n"])
         dati.append({"id": m["id"], "name": m["nome"], "version": ultima["n"], "invio": ultima.get("invio"),
-                     "pts": punti_ultima(m["id"], ultima["n"])})
+                     "pts": pts, "wpts": wpts})
     risposta = editor(data=dati, data_version=f"{impronta}|{cantiere_sel}|{mezzo_sel}", user=utente,
                       msg=st.session_state.get("msg"), height=ALTEZZA_EDITOR, key="editor", default=None)
 
@@ -248,13 +250,14 @@ def scheda_editor():
             avviso("Non hai i permessi per modificare questa gita.", ok=False, nonce=nonce, gita_id=gid)
         elif azione == "save":
             n = archivio.salva(gid, risposta["pts"], utente, risposta.get("note") or "Correzioni",
-                               base=int(risposta["base"]), nome=risposta.get("name"), nonce=nonce)
+                               base=int(risposta["base"]), nome=risposta.get("name"), nonce=nonce,
+                               waypoint=risposta.get("wpts"))
             avviso(f"Salvata la versione {n} di {risposta.get('name')}", nonce=nonce)
         elif azione == "create":
             dest = cantiere_sel if cantiere_sel not in (TUTTI, SENZA) else None
             archivio.crea(risposta.get("name") or "Gita senza nome", risposta["pts"], utente,
                           risposta.get("note") or "Creata dall'editor", nonce=nonce, cantiere=dest,
-                          mezzo=mezzo_sel if mezzo_sel not in (TUTTI, SENZA) else None)
+                          mezzo=mezzo_sel if mezzo_sel not in (TUTTI, SENZA) else None, waypoint=risposta.get("wpts"))
             avviso(f"Creata la gita {risposta.get('name')}", nonce=nonce, local_id=risposta.get("local_id"))
         elif azione == "archive":
             archivio.archivia(gid, utente)
@@ -309,7 +312,8 @@ def scheda_storico():
     st.dataframe(
         [{"Versione": v["n"], "Stato": "Pubblicata" if pub and pub["n"] == v["n"] else "",
           "Data": data_breve(v["data"]), "Autore": v["autore"], "Nota": v["nota"],
-          "Km": v["km_tot"], "Punti": v["punti"]} for v in reversed(m["versioni"])],
+          "Km": v["km_tot"], "Punti": v["punti"], "Note sulla mappa": v.get("note_mappa", 0)}
+         for v in reversed(m["versioni"])],
         hide_index=True, width="stretch",
     )
     col_v, col_dl, col_rip, col_pub = st.columns(4, vertical_alignment="bottom")
