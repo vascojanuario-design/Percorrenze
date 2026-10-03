@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
 <style>
-:root{--ink:#1C2A2E;--ink2:#56656A;--line:#D3DAD8;--bg:#F1F4F3;--card:#FFFFFF;--sig:#F2C230;--warn:#D9480F;--spike:#B8235A;--danger:#B42318;--transfer:#46535A;
+:root{--brand:#009640;--brand2:#007A34;--brand3:#E8F5EC;--ink:#1C2A2E;--ink2:#56656A;--line:#D3DAD8;--bg:#F1F4F3;--card:#FFFFFF;--sig:#F2C230;--warn:#D9480F;--spike:#B8235A;--danger:#B42318;--transfer:#46535A;
 --f:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;--fc:'Barlow Semi Condensed','Arial Narrow',system-ui,sans-serif}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -29,8 +29,8 @@ h3{font-size:15px;margin:18px 0 8px;display:flex;align-items:center;gap:8px}
 button,.btn{font:500 14px var(--f);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 button:hover:not(:disabled),.btn:hover{background:#EAF0EE;border-color:#B9C4C1}
 button:disabled{opacity:.42;cursor:default}
-button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
-button.primary:hover:not(:disabled){background:#2D4247}
+button.primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+button.primary:hover:not(:disabled){background:var(--brand2);border-color:var(--brand2)}
 button.danger{color:var(--danger)}
 button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-decoration:underline;text-underline-offset:2px}
 :focus-visible{outline:2px solid #2B7FD8;outline-offset:2px}
@@ -106,6 +106,24 @@ button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-d
 .an.gap{background:var(--warn)}.an.spike{background:var(--spike)}.an.inv{background:#6C7A80}
 .pos{background:var(--warn);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 1px var(--warn)}
 .leaflet-container{font-family:var(--f)}
+.solo-crea{display:none!important}
+body.modo-crea .solo-crea{display:revert!important}
+body.modo-crea .solo-editor{display:none!important}
+body.modo-crea #seqbar{display:none!important}
+body:not(.modo-crea) #altre>summary{display:none}
+#altre{margin-top:16px;border-top:1px solid var(--line);padding-top:6px}
+#altre>summary{cursor:pointer;font:600 15px var(--fc);padding:6px 0;color:var(--ink2)}
+.passo{display:flex;align-items:center;gap:8px;font:600 15px var(--fc);margin:16px 0 8px}
+.passo i{font-style:normal;display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;align-items:center;justify-content:center;font-size:13px}
+#mtools{position:absolute;top:12px;left:12px;z-index:800;display:flex;gap:6px;flex-wrap:wrap;max-width:calc(100% - 80px)}
+#mtools button{box-shadow:0 1px 6px rgba(28,42,46,.22);padding:8px 12px;font-weight:600}
+#mtools button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+#mtools .sep{width:6px}
+#salvastato{display:flex;align-items:center;gap:8px;font-size:14px;margin:6px 0 10px;padding:8px 10px;border-radius:8px;background:var(--brand3);color:var(--brand2)}
+#salvastato.mod{background:#FFF4D6;color:#7A5600}
+#salvastato.nuovo{background:#EEF1F0;color:var(--ink2)}
+#salvastato::before{content:"";width:9px;height:9px;border-radius:50%;background:currentColor;flex:none}
+.grid2 .primary{font-weight:600}
 .wp{background:none;border:none}
 .wp span{display:flex;width:100%;height:100%;align-items:center;justify-content:center;border-radius:7px 7px 7px 0;border:2px solid #fff;color:#fff;font:600 12px var(--fc);box-shadow:0 1px 4px rgba(0,0,0,.4);box-sizing:border-box;cursor:pointer}
 .wp.on span{outline:3px solid var(--sig);outline-offset:1px}
@@ -126,9 +144,10 @@ button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-d
   <section>
     <div class="rowhead"><h2>Gite</h2><span class="help" id="who"></span></div>
     <ul id="list"></ul>
-    <div class="foot"><button id="newg">+ Nuova gita da disegnare</button></div>
+    <div class="foot solo-crea"><button id="newg" class="primary">+ Nuovo progetto</button></div>
   </section>
-  <section id="empty"><p class="help">Seleziona una gita dall'elenco o cliccala sulla mappa per correggerla. Le modifiche restano una bozza su questo computer finché non le invii al server.</p></section>
+  <section id="empty"><p class="help solo-editor">Seleziona una gita dall'elenco o cliccala sulla mappa per correggerla. Le modifiche restano una bozza su questo computer finché non le invii al server.</p>
+    <p class="help solo-crea">Riprendi un progetto in corso dall'elenco, oppure premi <b>+ Nuovo progetto</b> per iniziare una gita da zero. I progetti salvati restano sul server: li ritrovi da qualsiasi computer e li vedono anche i colleghi del cantiere, ma non arrivano agli operatori finché la gita non è conclusa e pubblicata.</p></section>
   <section id="act" hidden>
     <input id="name" aria-label="Nome della gita" placeholder="Zona, mezzo, turno, numero gita">
     <div id="stats"></div>
@@ -139,25 +158,15 @@ button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-d
       <button id="fit">Inquadra gita</button>
     </div>
 
-    <div id="selbox">
-      <p id="selinfo"></p>
-      <div class="grid2">
-        <button data-a="del" class="danger">Elimina punti</button>
-        <button data-a="split">Dividi qui</button>
-        <button data-a="tr">Segna trasferimento</button>
-        <button data-a="rc">Segna raccolta</button>
-        <button data-a="ts">Taglia inizio fin qui</button>
-        <button data-a="te">Taglia fine da qui</button>
-      </div>
-    </div>
-    <p class="help" style="margin-top:8px">Clic su un punto per selezionarlo, <kbd>Maiusc</kbd>+clic per estendere a un tratto. Trascina un punto per spostarlo, clicca un cerchio tratteggiato per aggiungerne uno. <kbd>Canc</kbd> elimina, <kbd>Esc</kbd> deseleziona.</p>
-
-    <h3>Disegno, punti e note <span class="count zero" id="wpcount"></span></h3>
+    <div class="passo solo-crea"><i>1</i>Disegna il percorso</div>
+    <h3 class="solo-editor">Percorso e punti d'interesse <span class="count zero" id="wpcount"></span></h3>
     <div class="tools" style="margin-top:0">
       <button id="mdraw" title="Ogni clic sulla mappa aggiunge un punto al percorso">Disegna percorso</button>
-      <button id="mwp" title="Clic sulla mappa per mettere un punto con una nota">Aggiungi punto o nota</button>
+      <button id="mwp" title="Clic sulla mappa per mettere un punto d'interesse con una nota">Aggiungi punto d'interesse</button>
     </div>
     <p class="help" id="modehelp" style="margin-top:6px" hidden></p>
+    <p class="help solo-crea" style="margin-top:6px">Clicca lungo le strade, un punto a ogni curva o incrocio. Lo sfondo "Satellite con vie" aiuta a seguire le strade.</p>
+    <div class="passo solo-crea"><i>2</i>Aggiungi i punti d'interesse <span class="count zero" id="wpcount2"></span></div>
     <div id="wpedit" hidden>
       <select id="wptipo" aria-label="Tipo di punto"></select>
       <textarea id="wptesto" rows="2" placeholder="Per esempio: cancello verde, chiedere al custode" aria-label="Testo della nota"></textarea>
@@ -165,21 +174,43 @@ button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-d
     </div>
     <ul id="wplist"></ul>
 
-    <h3>Da verificare <span class="count" id="ancount"></span></h3>
-    <div class="anopts">
-      <label>Segmenti oltre <input type="number" id="gapth" value="250" min="50" step="25"> m</label>
-      <label><input type="checkbox" id="showinv"> Mostra inversioni a U</label>
-    </div>
-    <ul id="anlist"></ul>
-    <button class="link" id="unign" hidden></button>
+    <details id="altre" open>
+      <summary>Altre opzioni: modifica dei punti, trasferimenti, controlli</summary>
+      <div id="selbox">
+        <p id="selinfo"></p>
+        <div class="grid2">
+          <button data-a="del" class="danger">Elimina punti</button>
+          <button data-a="split">Dividi qui</button>
+          <button data-a="tr">Segna trasferimento</button>
+          <button data-a="rc">Segna raccolta</button>
+          <button data-a="ts">Taglia inizio fin qui</button>
+          <button data-a="te">Taglia fine da qui</button>
+        </div>
+      </div>
+      <p class="help" style="margin-top:8px">Clic su un punto per selezionarlo, <kbd>Maiusc</kbd>+clic per estendere a un tratto. Trascina un punto per spostarlo, clicca un cerchio tratteggiato per aggiungerne uno. <kbd>Canc</kbd> elimina, <kbd>Esc</kbd> deseleziona.</p>
 
-    <h3>Invia al server</h3>
+      <h3>Da verificare <span class="count" id="ancount"></span></h3>
+      <div class="anopts">
+        <label>Segmenti oltre <input type="number" id="gapth" value="250" min="50" step="25"> m</label>
+        <label><input type="checkbox" id="showinv"> Mostra inversioni a U</label>
+      </div>
+      <ul id="anlist"></ul>
+      <button class="link" id="unign" hidden></button>
+      <div class="actions"><button id="rev">Inverti senso</button></div>
+    </details>
+
+    <h3 class="solo-editor">Invia al server</h3>
+    <div class="passo solo-crea"><i>3</i>Salva</div>
+    <div id="salvastato" class="solo-crea"></div>
     <p class="help" id="srvinfo"></p>
-    <div class="saverow"><input id="vnote" placeholder="Cosa hai corretto?" aria-label="Nota della versione"><button class="primary" id="send">Invia</button></div>
-    <div class="va"><button class="link" id="cmp">Confronta con la versione sul server</button><button class="link" id="discard">Scarta la bozza</button></div>
+    <div class="saverow"><input id="vnote" placeholder="Cosa hai corretto?" aria-label="Nota della versione"><button class="primary solo-editor" id="send">Invia</button></div>
+    <div class="grid2 solo-crea">
+      <button id="salvab" title="Salva il progetto sul server e continua a lavorarci quando vuoi">Salva bozza</button>
+      <button id="conclude" class="primary" title="La gita passa tra le gite del cantiere, pronta per essere pubblicata">Concludi la gita</button>
+    </div>
+    <div class="va"><button class="link" id="cmp">Confronta con la versione sul server</button><button class="link" id="discard">Scarta le modifiche</button></div>
 
     <div class="actions">
-      <button id="rev">Inverti senso</button>
       <button id="delg" class="danger">Archivia gita</button>
     </div>
   </section>
@@ -187,6 +218,14 @@ button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-d
 <main>
   <div id="map"></div>
   <div id="hint" hidden></div>
+  <div id="mtools" hidden>
+    <button data-t="mdraw" title="Disegna il percorso">Disegna</button>
+    <button data-t="mwp" title="Aggiungi un punto d'interesse">Punto d'interesse</button>
+    <span class="sep"></span>
+    <button data-t="undo" title="Annulla (Ctrl+Z)">Annulla</button>
+    <button data-t="redo" title="Ripeti (Ctrl+Y)">Ripeti</button>
+    <button data-t="fit" title="Inquadra la gita">Inquadra</button>
+  </div>
   <div id="seqbar" hidden>
     <button id="play" aria-label="Riproduci">Segui</button>
     <input type="range" id="seq" min="0" max="1000" value="0" aria-label="Posizione lungo il percorso">
@@ -246,7 +285,7 @@ function parseGPX(text,file){
 }
 
 /* ---------- bozze locali e dati dal server ---------- */
-const LK='percorsi-locali';
+let LK='percorsi-locali', MODE='editor';
 function mkLocal(name,pts,dismissed,wp){return {id:'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),sid:null,base:null,name,file:'',color:PAL[0],pts,wp:conId(wp),server:null,serverWp:null,serverName:name,undo:[],redo:[],versions:[],dismissed:dismissed||{},visible:true,dirty:true};}
 function save(){
   try{localStorage.setItem(LK,JSON.stringify(gite.filter(g=>!g.sid).map(g=>({id:g.id,name:g.name,pts:g.pts,wp:g.wp,dismissed:g.dismissed}))));}catch(e){}
@@ -502,12 +541,25 @@ function renderAnPanel(){
   const ign=Object.keys(act.dismissed).length,u=$('#unign');u.hidden=!ign;u.textContent='Riapri '+ign+(ign===1?' segnalazione chiusa':' segnalazioni chiuse');
 }
 function renderServer(){
+  if(MODE==='crea'){
+    const st=$('#salvastato');
+    st.className=!act.sid?'nuovo':act.dirty?'mod':'';
+    st.textContent=!act.sid?'Progetto nuovo: non ancora salvato':act.dirty?'Modifiche non salvate':'Bozza salvata sul server';
+    $('#srvinfo').textContent=act.pts.length<2?'Disegna almeno due punti per poter salvare.':'';
+    $('#salvab').disabled=act.pts.length<2||(!!act.sid&&!act.dirty);
+    $('#conclude').disabled=act.pts.length<2;
+    $('#vnote').placeholder='Nota facoltativa sulla versione';
+    $('#discard').hidden=!act.dirty||!act.sid;$('#cmp').hidden=!act.sid;
+    $('#delg').textContent=act.sid?'Elimina progetto':'Rimuovi progetto';
+    return;
+  }
   $('#srvinfo').textContent=!act.sid?'Questa gita esiste solo qui: inviandola verrà creata sul server.':act.dirty?'Le modifiche sono salvate su questo computer. Inviale per renderle visibili a tutti.':'Nessuna modifica rispetto al server.';
   $('#send').disabled=!act.dirty&&!!act.sid;$('#discard').hidden=!act.dirty||!act.sid;$('#cmp').hidden=!act.sid;
   $('#delg').textContent=act.sid?'Archivia gita':'Rimuovi gita';
 }
 function renderPanel(){
-  $('#empty').hidden=!!act;$('#act').hidden=!act;if(!act)return;
+  $('#empty').hidden=!!act;$('#act').hidden=!act;
+  if(!act){$('#mtools').hidden=true;return;}
   renderStats();renderSelPanel();renderAnPanel();renderServer();renderWpPanel();
 }
 
@@ -533,7 +585,7 @@ function renderWpList(){
   const ul=$('#wplist');ul.innerHTML='';
   const P=act.pts,c=cum(P);
   const elenco=act.wp.map(w=>({w,...posizioneWp(w,P,c)})).sort((a,b)=>a.at-b.at);
-  $('#wpcount').textContent=act.wp.length;
+  $('#wpcount').textContent=act.wp.length;$('#wpcount2').textContent=act.wp.length;
   if(!elenco.length){ul.innerHTML='<li class="none" style="cursor:default;display:block">Nessun punto o nota. Usa "Aggiungi punto o nota".</li>';return;}
   for(const {w,at,dist} of elenco){
     const t=TIPI_WP[w.tipo]||TIPI_WP.nota,li=document.createElement('li');li.className=w.id===wsel?'on':'';
@@ -548,6 +600,10 @@ function renderWpPanel(){
   if(!act)return;
   $('#mdraw').classList.toggle('on',modo==='disegna');$('#mdraw').textContent=modo==='disegna'?'Fine disegno':'Disegna percorso';
   $('#mwp').classList.toggle('on',modo==='punto');
+  const tb=$('#mtools');tb.hidden=!act;
+  tb.querySelector('[data-t=mdraw]').classList.toggle('on',modo==='disegna');tb.querySelector('[data-t=mdraw]').textContent=modo==='disegna'?'Fine disegno':'Disegna';
+  tb.querySelector('[data-t=mwp]').classList.toggle('on',modo==='punto');
+  tb.querySelector('[data-t=undo]').disabled=!act.undo.length;tb.querySelector('[data-t=redo]').disabled=!act.redo.length;
   const h=$('#modehelp');
   h.hidden=!modo;
   h.textContent=modo==='disegna'?'Clicca sulla mappa per aggiungere punti, anche sopra strade già percorse. Se selezioni un punto, i nuovi vengono inseriti subito dopo. Annulla toglie l\'ultimo.':
@@ -585,7 +641,7 @@ $('#wpdel').onclick=()=>{const w=wpSel();if(!w)return;pushUndo();act.wp=act.wp.f
 $('#mdraw').onclick=()=>{setModo(modo==='disegna'?null:'disegna');if(modo)toast('Clicca sulla mappa per aggiungere punti. Esc per finire.');};
 $('#mwp').onclick=()=>setModo(modo==='punto'?null:'punto');
 $('#newg').onclick=()=>{
-  const g=mkLocal('Nuova gita',[]);g.color=PAL[gite.length%PAL.length];gite.push(g);
+  const g=mkLocal('Nuova gita',[]);g.dirty=true;g.color=PAL[gite.length%PAL.length];gite.push(g);
   activate(g,false);setModo('disegna');save();
   $('#name').focus();$('#name').select();toast('Scrivi il nome, poi clicca sulla mappa per disegnare il percorso.');
 };
@@ -621,17 +677,28 @@ $('#fit').onclick=()=>fitAct();
 $('#rev').onclick=()=>{pushUndo();const P=act.pts,n=P.length,ty=P.map(p=>p.t);P.reverse();for(let j=0;j<n-1;j++)P[j].t=ty[n-2-j];P[n-1].t='r';sel=null;afterEdit();toast('Senso di marcia invertito');};
 $('#name').oninput=e=>{act.name=e.target.value;act.dirty=act.name!==act.serverName||act.dirty;renderStats();renderServer();renderList();save();};
 function send(payload){window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:setComponentValue',value:payload,dataType:'json'},'*');}
-$('#send').onclick=()=>{
+function invia(stato){
   if(!USER){toast('Scrivi il tuo nome nella barra laterale prima di inviare');return;}
-  if(act.pts.length<2){toast('Disegna almeno due punti prima di inviare');return;}
-  const note=$('#vnote').value.trim()||'Correzioni';
+  if(act.pts.length<2){toast('Disegna almeno due punti prima di salvare');return;}
+  const soloStato=stato==='concludi'&&!!act.sid&&!act.dirty;
+  if(stato==='bozza'&&act.sid&&!act.dirty){toast('Nessuna modifica da salvare');return;}
+  const note=$('#vnote').value.trim()||(stato==='bozza'?'Bozza':stato==='concludi'?'Gita conclusa':'Correzioni');
   const nonce=Date.now()+'-'+Math.random().toString(36).slice(2);
   if(act.sid)justSent.set(act.sid,nonce);
   $('#send').disabled=true;$('#send').textContent='Invio…';
-  send({action:act.sid?'save':'create',gita_id:act.sid||null,base:act.base||null,name:act.name,note,local_id:act.id,
+  for(const b of ['#salvab','#conclude'])$(b).disabled=true;
+  $('#vnote').value='';
+  send({action:act.sid?'save':'create',stato,solo_stato:soloStato,gita_id:act.sid||null,base:act.base||null,name:act.name,note,local_id:act.id,
     pts:act.pts.map(p=>[+p.lat.toFixed(6),+p.lon.toFixed(6),p.t]),
     wpts:act.wp.map(w=>({lat:+w.lat.toFixed(6),lon:+w.lon.toFixed(6),tipo:w.tipo,testo:w.testo})),nonce});
+}
+$('#send').onclick=()=>invia(null);
+$('#salvab').onclick=()=>invia('bozza');
+$('#conclude').onclick=()=>{
+  if(!confirm('Concludere "'+act.name+'"?\n\nLa gita esce dai progetti in corso e passa tra le gite del cantiere, dove potrai assegnarla e pubblicarla per gli operatori.'))return;
+  invia('concludi');
 };
+document.querySelectorAll('#mtools [data-t]').forEach(b=>b.onclick=()=>$('#'+b.dataset.t).click());
 $('#vnote').onkeydown=e=>{if(e.key==='Enter')$('#send').click();};
 $('#cmp').onclick=()=>{cmpOn=!cmpOn;renderCmp();if(cmpOn)toast('Versione del server in viola tratteggiato');};
 $('#discard').onclick=()=>{
@@ -645,10 +712,10 @@ $('#unign').onclick=()=>{act.dismissed={};save();renderAnom();renderAnPanel();re
 $('#delg').onclick=()=>{
   if(act.sid){
     if(!USER){toast('Scrivi il tuo nome nella barra laterale prima di archiviare');return;}
-    if(!confirm('Archiviare "'+act.name+'"? Sparirà dall\'editor ma resterà nello storico, da dove si può riattivare.'))return;
+    if(!confirm(MODE==='crea'?'Eliminare il progetto "'+act.name+'"?':'Archiviare "'+act.name+'"? Sparirà dall\'editor ma resterà nello storico, da dove si può riattivare.'))return;
     send({action:'archive',gita_id:act.sid,nonce:Date.now()+'-'+Math.random().toString(36).slice(2)});return;
   }
-  if(!confirm('Rimuovere "'+act.name+'"? Non è ancora sul server, quindi andrà persa.'))return;
+  if(!confirm('Rimuovere "'+act.name+'"? Non è ancora sul server, quindi andrà perso.'))return;
   groups[act.id]?.remove();delete groups[act.id];gite.splice(gite.indexOf(act),1);act=null;sel=null;renderAll();save();
 };
 
@@ -690,7 +757,13 @@ window.addEventListener('message',e=>{
   const d=e.data;if(!d||d.type!=='streamlit:render')return;
   const a=d.args||{};
   USER=a.user||'';$('#who').textContent=USER?'Stai lavorando come '+USER:'Nome non impostato';
-  if(a.height&&a.height!==HEIGHT){HEIGHT=a.height;document.body.style.height=HEIGHT+'px';}
+  if(!booted&&a.mode==='crea'){
+    MODE='crea';LK='percorsi-locali-crea';document.body.classList.add('modo-crea');$('#altre').open=false;
+    $('aside h2').textContent='Progetti in corso';
+  }
+  let h=a.height||HEIGHT;
+  if(MODE==='crea'){try{h=Math.max(560,window.parent.innerHeight-150);}catch(e){}}
+  if(h!==HEIGHT){HEIGHT=h;document.body.style.height=HEIGHT+'px';}
   setH(HEIGHT);
   const m=a.msg,newMsg=!!(m&&m.nonce!==lastMsg);
   if(a.data_version!==DATA_VERSION){
@@ -699,12 +772,14 @@ window.addEventListener('message',e=>{
     setTimeout(()=>{map.invalidateSize();if(first)fitAll();else if(act)fitAct();},120);
   }
   if(newMsg){lastMsg=m.nonce;toast(m.text);
-    if(m.local_id&&m.ok){const g=gite.find(x=>x.id===m.local_id&&!x.sid);if(g){groups[g.id]?.remove();delete groups[g.id];gite.splice(gite.indexOf(g),1);renderAll();save();}}
+    if(m.local_id&&m.ok){const g=gite.find(x=>x.id===m.local_id&&!x.sid);if(g){const eraAttiva=act===g;groups[g.id]?.remove();delete groups[g.id];gite.splice(gite.indexOf(g),1);if(eraAttiva)act=null;renderAll();save();
+      const nuova=m.gita_id&&gite.find(x=>x.sid===m.gita_id);if(nuova)activate(nuova,false);}}
   }
   $('#send').textContent='Invia';if(act)renderServer();
   setTimeout(()=>map.invalidateSize(),50);
 });
 document.body.style.height=HEIGHT+'px';
+try{window.parent.addEventListener('resize',()=>{if(MODE!=='crea')return;const h=Math.max(560,window.parent.innerHeight-150);if(h!==HEIGHT){HEIGHT=h;document.body.style.height=h+'px';setH(h);}});}catch(e){}
 window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:componentReady',apiVersion:1},'*');
 </script>
 </body>
