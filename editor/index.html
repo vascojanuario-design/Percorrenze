@@ -106,6 +106,18 @@ button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-d
 .an.gap{background:var(--warn)}.an.spike{background:var(--spike)}.an.inv{background:#6C7A80}
 .pos{background:var(--warn);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 1px var(--warn)}
 .leaflet-container{font-family:var(--f)}
+.wp{background:none;border:none}
+.wp span{display:flex;width:100%;height:100%;align-items:center;justify-content:center;border-radius:7px 7px 7px 0;border:2px solid #fff;color:#fff;font:600 12px var(--fc);box-shadow:0 1px 4px rgba(0,0,0,.4);box-sizing:border-box;cursor:pointer}
+.wp.on span{outline:3px solid var(--sig);outline-offset:1px}
+.disegno .leaflet-container,.disegno .leaflet-container.leaflet-grab{cursor:crosshair}
+.tools button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+#wpedit{border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0;display:grid;gap:6px}
+#wpedit select,#wpedit textarea{font:inherit;font-size:14px;border:1px solid var(--line);border-radius:6px;padding:5px 8px;width:100%;box-sizing:border-box;resize:vertical}
+#wplist{list-style:none;margin:0;padding:0;max-height:220px;overflow-y:auto}
+#wplist li{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:center;padding:5px 4px;border-radius:5px;cursor:pointer;font-size:14px}
+#wplist li:hover,#wplist li.on{background:#F0F4F3}
+#wplist .wd{width:20px;height:20px;border-radius:5px 5px 5px 0;color:#fff;font:600 11px var(--fc);display:flex;align-items:center;justify-content:center}
+#wplist small{color:var(--ink2);display:block;font-size:12px}
 @media (max-width:820px){body{grid-template-columns:1fr;grid-template-rows:55vh 1fr;overflow:auto}main{grid-row:1}aside{grid-row:2;border-right:none}}
 </style>
 </head>
@@ -114,6 +126,7 @@ button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-d
   <section>
     <div class="rowhead"><h2>Gite</h2><span class="help" id="who"></span></div>
     <ul id="list"></ul>
+    <div class="foot"><button id="newg">+ Nuova gita da disegnare</button></div>
   </section>
   <section id="empty"><p class="help">Seleziona una gita dall'elenco o cliccala sulla mappa per correggerla. Le modifiche restano una bozza su questo computer finché non le invii al server.</p></section>
   <section id="act" hidden>
@@ -138,6 +151,19 @@ button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-d
       </div>
     </div>
     <p class="help" style="margin-top:8px">Clic su un punto per selezionarlo, <kbd>Maiusc</kbd>+clic per estendere a un tratto. Trascina un punto per spostarlo, clicca un cerchio tratteggiato per aggiungerne uno. <kbd>Canc</kbd> elimina, <kbd>Esc</kbd> deseleziona.</p>
+
+    <h3>Disegno, punti e note <span class="count zero" id="wpcount"></span></h3>
+    <div class="tools" style="margin-top:0">
+      <button id="mdraw" title="Ogni clic sulla mappa aggiunge un punto al percorso">Disegna percorso</button>
+      <button id="mwp" title="Clic sulla mappa per mettere un punto con una nota">Aggiungi punto o nota</button>
+    </div>
+    <p class="help" id="modehelp" style="margin-top:6px" hidden></p>
+    <div id="wpedit" hidden>
+      <select id="wptipo" aria-label="Tipo di punto"></select>
+      <textarea id="wptesto" rows="2" placeholder="Per esempio: cancello verde, chiedere al custode" aria-label="Testo della nota"></textarea>
+      <div class="va"><button class="link" id="wpclose">Fatto</button><button class="link" id="wpdel" style="color:var(--danger)">Elimina punto</button></div>
+    </div>
+    <ul id="wplist"></ul>
 
     <h3>Da verificare <span class="count" id="ancount"></span></h3>
     <div class="anopts">
@@ -186,6 +212,14 @@ function cum(P){const c=[0];for(let i=1;i<P.length;i++)c.push(c[i-1]+hv(P[i-1],P
 const fmtKm = m => (m/1000).toLocaleString('it-IT',{minimumFractionDigits:1,maximumFractionDigits:1})+' km';
 const fmtM = m => m<1000 ? Math.round(m)+' m' : fmtKm(m);
 const clone = P => P.map(p=>({lat:p.lat,lon:p.lon,t:p.t}));
+const cloneW = W => (W||[]).map(w=>({...w}));
+const wid = () => 'w'+Math.random().toString(36).slice(2,9);
+const conId = W => (W||[]).map(w=>({id:w.id||wid(),lat:w.lat,lon:w.lon,tipo:w.tipo||'nota',testo:w.testo||''}));
+/* Tipi di punto: devono coincidere con TIPI_WAYPOINT in archivio.py */
+const TIPI_WP={cassonetto:{l:'Cassonetti / raccolta',s:'C',c:'#2F6B4F'},utenza:{l:'Utenza critica',s:'U',c:'#1F5FA8'},
+  attenzione:{l:'Attenzione (retromarcia, pericolo)',s:'!',c:'#C92A2A'},accesso:{l:'Accesso (cancello, chiave, orari)',s:'A',c:'#7A4FA0'},
+  nota:{l:'Nota',s:'N',c:'#5F6B73'}};
+let modo = null, wsel = null;
 const key = p => p.lat.toFixed(5)+','+p.lon.toFixed(5);
 
 /* il tipo di un segmento (i -> i+1) è quello del punto i */
@@ -196,7 +230,7 @@ function clean(P){const out=[];let rem=0;for(const p of P){const last=out[out.le
 
 function newGita(name,file,raw,note){
   const c=clean(raw);
-  const g={id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),name,file,color:PAL[gite.length%PAL.length],pts:c.pts,undo:[],redo:[],versions:[],dismissed:{},visible:true,dirty:false};
+  const g={id:'g'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),name,file,color:PAL[gite.length%PAL.length],pts:c.pts,wp:[],undo:[],redo:[],versions:[],dismissed:{},visible:true,dirty:false};
   g.versions.push({n:1,date:new Date().toISOString(),note:note||('Importata da '+file+(c.rem?', rimossi '+c.rem+' punti doppi':'')),pts:clone(g.pts)});
   return g;
 }
@@ -213,28 +247,29 @@ function parseGPX(text,file){
 
 /* ---------- bozze locali e dati dal server ---------- */
 const LK='percorsi-locali';
-function mkLocal(name,pts,dismissed){return {id:'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),sid:null,base:null,name,file:'',color:PAL[0],pts,server:null,serverName:name,undo:[],redo:[],versions:[],dismissed:dismissed||{},visible:true,dirty:true};}
+function mkLocal(name,pts,dismissed,wp){return {id:'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),sid:null,base:null,name,file:'',color:PAL[0],pts,wp:conId(wp),server:null,serverWp:null,serverName:name,undo:[],redo:[],versions:[],dismissed:dismissed||{},visible:true,dirty:true};}
 function save(){
-  try{localStorage.setItem(LK,JSON.stringify(gite.filter(g=>!g.sid).map(g=>({id:g.id,name:g.name,pts:g.pts,dismissed:g.dismissed}))));}catch(e){}
+  try{localStorage.setItem(LK,JSON.stringify(gite.filter(g=>!g.sid).map(g=>({id:g.id,name:g.name,pts:g.pts,wp:g.wp,dismissed:g.dismissed}))));}catch(e){}
   try{for(const g of gite){if(!g.sid)continue;
-    if(g.dirty)localStorage.setItem(DK+g.sid,JSON.stringify({base:g.base,name:g.name,pts:g.pts}));else localStorage.removeItem(DK+g.sid);
+    if(g.dirty)localStorage.setItem(DK+g.sid,JSON.stringify({base:g.base,name:g.name,pts:g.pts,wp:g.wp}));else localStorage.removeItem(DK+g.sid);
     localStorage.setItem(IK+g.sid,JSON.stringify(g.dismissed));}}catch(e){}
 }
 function fromServer(){
   const keep=act&&act.sid,lost=[];
   let local=gite.filter(g=>!g.sid);
-  if(!booted){try{local=(JSON.parse(localStorage.getItem(LK)||'[]')).map(x=>Object.assign(mkLocal(x.name,x.pts,x.dismissed),{id:x.id}));}catch(e){local=[];}}
+  if(!booted){try{local=(JSON.parse(localStorage.getItem(LK)||'[]')).map(x=>Object.assign(mkLocal(x.name,x.pts,x.dismissed,x.wp),{id:x.id}));}catch(e){local=[];}}
   Object.values(groups).forEach(l=>l.remove());for(const k in groups)delete groups[k];
-  gite=[];act=null;sel=null;cmpOn=false;
+  gite=[];act=null;sel=null;cmpOn=false;wsel=null;
   DATA.forEach((d,i)=>{
     const pts=d.pts.map(([lat,lon,t])=>({lat,lon,t:t||'r'}));
-    const g={id:'s'+d.id,sid:d.id,base:d.version,name:d.name,file:'',color:PAL[i%PAL.length],pts,server:clone(pts),serverName:d.name,undo:[],redo:[],versions:[],dismissed:{},visible:true,dirty:false};
+    const wp=conId(d.wpts);
+    const g={id:'s'+d.id,sid:d.id,base:d.version,name:d.name,file:'',color:PAL[i%PAL.length],pts,wp,server:clone(pts),serverWp:cloneW(wp),serverName:d.name,undo:[],redo:[],versions:[],dismissed:{},visible:true,dirty:false};
     try{
       const dr=JSON.parse(localStorage.getItem(DK+d.id)||'null');
       const pend=justSent.get(d.id),own=!!pend&&pend===d.invio;
       if(pend&&(own||!dr||dr.base!==d.version))justSent.delete(d.id);
-      if(dr&&dr.base===d.version){g.pts=dr.pts;g.name=dr.name;g.dirty=true;}
-      else if(dr){localStorage.removeItem(DK+d.id);if(!own){const nm=dr.name+' (tua bozza)';local.push(mkLocal(nm,dr.pts));lost.push([d.name,nm]);}}
+      if(dr&&dr.base===d.version){g.pts=dr.pts;g.name=dr.name;if(dr.wp)g.wp=conId(dr.wp);g.dirty=true;}
+      else if(dr){localStorage.removeItem(DK+d.id);if(!own){const nm=dr.name+' (tua bozza)';local.push(mkLocal(nm,dr.pts,undefined,dr.wp));lost.push([d.name,nm]);}}
       g.dismissed=JSON.parse(localStorage.getItem(IK+d.id)||'{}');
     }catch(e){}
     gite.push(g);
@@ -282,17 +317,22 @@ L.control.scale({imperial:false,position:'bottomright'}).addTo(map);
 
 const groups={}, vLayer=L.layerGroup().addTo(map), sLayer=L.layerGroup().addTo(map), aLayer=L.layerGroup().addTo(map), cLayer=L.layerGroup().addTo(map), qLayer=L.layerGroup().addTo(map);
 
+const wLayer=L.layerGroup().addTo(map);
 function renderGita(g){
   let grp=groups[g.id];if(!grp)grp=groups[g.id]=L.layerGroup().addTo(map);
   grp.clearLayers();if(!g.visible)return;
   const isA=g===act;
+  if(g.pts.length<2){
+    if(isA&&g.pts.length===1)L.marker([g.pts[0].lat,g.pts[0].lon],{icon:L.divIcon({className:'se s',html:'P',iconSize:[22,22]}),interactive:false,keyboard:false}).addTo(grp);
+    return;
+  }
   for(const r of runs(g.pts)){
     const ll=g.pts.slice(r.a,r.b+1).map(p=>[p.lat,p.lon]);
     if(isA){
       L.polyline(ll,{pane:'casing',color:'#fff',weight:10,opacity:.9,interactive:false}).addTo(grp);
       L.polyline(ll,{pane:'lines',color:r.t==='t'?'#46535A':g.color,weight:r.t==='t'?4:5,dashArray:r.t==='t'?'9 7':null,opacity:1}).on('click',onLineClick).addTo(grp);
     } else {
-      L.polyline(ll,{pane:'lines',color:g.color,weight:3,opacity:act?.45:.8,dashArray:r.t==='t'?'6 6':null}).on('click',e=>{L.DomEvent.stop(e);activate(g,true);}).addTo(grp);
+      L.polyline(ll,{pane:'lines',color:g.color,weight:3,opacity:act?.45:.8,dashArray:r.t==='t'?'6 6':null}).on('click',e=>{L.DomEvent.stop(e);if(modo){clickMappa(e.latlng);return;}activate(g,true);}).addTo(grp);
     }
   }
   if(isA){
@@ -302,7 +342,7 @@ function renderGita(g){
   }
 }
 function onLineClick(e){
-  L.DomEvent.stop(e);let best=0,bd=Infinity;const p={lat:e.latlng.lat,lon:e.latlng.lng};
+  L.DomEvent.stop(e);if(modo){clickMappa(e.latlng);return;}let best=0,bd=Infinity;const p={lat:e.latlng.lat,lon:e.latlng.lng};
   act.pts.forEach((q,i)=>{const d=hv(p,q);if(d<bd){bd=d;best=i;}});
   sel={a:best,b:best,anchor:best};
   if(map.getZoom()<17)map.setView([act.pts[best].lat,act.pts[best].lon],17,{animate:!RM});
@@ -312,8 +352,10 @@ function onLineClick(e){
 function renderVertices(){
   vLayer.clearLayers();const hint=$('#hint');
   if(!act||!act.visible){hint.hidden=true;return;}
-  if(map.getZoom()<16){hint.hidden=false;hint.textContent='Avvicina la mappa per vedere e modificare i punti';return;}
-  hint.hidden=true;
+  const msgModo=modo==='disegna'?'Disegno: ogni clic aggiunge un punto'+(sel&&sel.a===sel.b&&sel.a<act.pts.length-1?' dopo quello selezionato':' alla fine')+'. Esc per finire':
+    modo==='punto'?'Clicca dove vuoi mettere il punto o la nota. Esc per annullare':null;
+  if(map.getZoom()<16){hint.hidden=false;hint.textContent=msgModo||'Avvicina la mappa per vedere e modificare i punti';return;}
+  hint.hidden=!msgModo;if(msgModo)hint.textContent=msgModo;
   const b=map.getBounds().pad(.15),P=act.pts,inb=P.map(p=>b.contains([p.lat,p.lon]));
   let n=0;
   for(let i=0;i<P.length;i++){
@@ -322,6 +364,7 @@ function renderVertices(){
     const m=L.marker([P[i].lat,P[i].lon],{icon:L.divIcon({className:'vx'+(on?' on':''),iconSize:[sz,sz]}),draggable:true,keyboard:false,zIndexOffset:on?1000:500,title:'Punto '+(i+1)});
     m.on('click',e=>{
       L.DomEvent.stop(e);
+      if(modo){clickMappa(e.latlng);return;}
       const grp=[];P.forEach((q,j)=>{if(hv(q,P[i])<3)grp.push(j);});
       let t=i;
       if(grp.length>1){
@@ -390,7 +433,7 @@ function renderCmp(){
 }
 function renderSeq(){
   qLayer.clearLayers();const bar=$('#seqbar');
-  if(!act){bar.hidden=true;return;}bar.hidden=false;
+  if(!act||act.pts.length<2){bar.hidden=true;return;}bar.hidden=false;
   const P=act.pts,c=cum(P),tot=c[c.length-1],pos=seqPos/1000*tot;
   $('#seqlbl').textContent=fmtKm(pos)+' di '+fmtKm(tot);
   if(!seqOn)return;
@@ -447,7 +490,7 @@ function renderSelPanel(){
 function renderAnPanel(){
   const list=visibleAn(),ul=$('#anlist');ul.innerHTML='';
   const open=openAn(act).length,cnt=$('#ancount');cnt.textContent=open;cnt.className='count'+(open?'':' zero');
-  if(!list.length){ul.innerHTML='<li class="none" style="cursor:default">Nessuna segnalazione aperta.</li>';}
+  if(!list.length){ul.innerHTML='<li class="none" style="cursor:default;display:block">Nessuna segnalazione aperta.</li>';}
   for(const a of list){
     const li=document.createElement('li');
     const col=a.type==='gap'?'var(--warn)':a.type==='spike'?'var(--spike)':'#6C7A80';
@@ -465,21 +508,102 @@ function renderServer(){
 }
 function renderPanel(){
   $('#empty').hidden=!!act;$('#act').hidden=!act;if(!act)return;
-  renderStats();renderSelPanel();renderAnPanel();renderServer();
+  renderStats();renderSelPanel();renderAnPanel();renderServer();renderWpPanel();
 }
 
+/* ---------- punti e note ---------- */
+function renderWp(){
+  wLayer.clearLayers();if(!act||!act.visible)return;
+  const drag=map.getZoom()>=15&&modo!=='disegna';
+  for(const w of act.wp){
+    const t=TIPI_WP[w.tipo]||TIPI_WP.nota,on=w.id===wsel;
+    const m=L.marker([w.lat,w.lon],{icon:L.divIcon({className:'wp'+(on?' on':''),html:`<span style="background:${t.c}">${t.s}</span>`,iconSize:[24,24],iconAnchor:[2,24]}),
+      draggable:drag,zIndexOffset:on?1500:800,keyboard:false,title:w.testo||t.l});
+    m.on('click',ev=>{L.DomEvent.stop(ev);if(modo){clickMappa(ev.latlng);return;}wsel=w.id;renderWp();renderWpPanel();});
+    m.on('dragstart',()=>pushUndo());
+    m.on('dragend',ev=>{const ll=ev.target.getLatLng();w.lat=ll.lat;w.lon=ll.lng;wsel=w.id;afterEdit();});
+    m.addTo(wLayer);
+  }
+}
+function posizioneWp(w,P,c){
+  let best=-1,bd=Infinity;P.forEach((q,i)=>{const d=hv(w,q);if(d<bd){bd=d;best=i;}});
+  return best<0?{at:Infinity,dist:Infinity}:{at:c[best],dist:bd};
+}
+function renderWpList(){
+  const ul=$('#wplist');ul.innerHTML='';
+  const P=act.pts,c=cum(P);
+  const elenco=act.wp.map(w=>({w,...posizioneWp(w,P,c)})).sort((a,b)=>a.at-b.at);
+  $('#wpcount').textContent=act.wp.length;
+  if(!elenco.length){ul.innerHTML='<li class="none" style="cursor:default;display:block">Nessun punto o nota. Usa "Aggiungi punto o nota".</li>';return;}
+  for(const {w,at,dist} of elenco){
+    const t=TIPI_WP[w.tipo]||TIPI_WP.nota,li=document.createElement('li');li.className=w.id===wsel?'on':'';
+    li.innerHTML=`<span class="wd" style="background:${t.c}">${t.s}</span><span><span class="lb"></span><small></small></span>`;
+    li.querySelector('.lb').textContent=w.testo||t.l;
+    li.querySelector('small').textContent=!isFinite(at)?t.l:dist>60?t.l+', lontano dal percorso ('+Math.round(dist)+' m)':t.l+', al '+fmtKm(at);
+    li.onclick=()=>{wsel=w.id;map.setView([w.lat,w.lon],Math.max(map.getZoom(),18),{animate:!RM});renderWp();renderWpPanel();};
+    ul.appendChild(li);
+  }
+}
+function renderWpPanel(){
+  if(!act)return;
+  $('#mdraw').classList.toggle('on',modo==='disegna');$('#mdraw').textContent=modo==='disegna'?'Fine disegno':'Disegna percorso';
+  $('#mwp').classList.toggle('on',modo==='punto');
+  const h=$('#modehelp');
+  h.hidden=!modo;
+  h.textContent=modo==='disegna'?'Clicca sulla mappa per aggiungere punti, anche sopra strade già percorse. Se selezioni un punto, i nuovi vengono inseriti subito dopo. Annulla toglie l\'ultimo.':
+    modo==='punto'?'Clicca sulla mappa dove mettere il punto.':'';
+  const w=act.wp.find(x=>x.id===wsel);
+  $('#wpedit').hidden=!w;
+  if(w){$('#wptipo').value=w.tipo;if(document.activeElement!==$('#wptesto'))$('#wptesto').value=w.testo;}
+  renderWpList();
+}
+function setModo(m){
+  modo=m;document.body.classList.toggle('disegno',!!m);
+  if(m==='disegna')map.doubleClickZoom.disable();else map.doubleClickZoom.enable();
+  renderVertices();renderWp();renderWpPanel();
+}
+function clickMappa(ll){
+  if(!act)return;
+  if(modo==='disegna'){
+    pushUndo();const P=act.pts,p={lat:ll.lat,lon:ll.lng,t:'r'};
+    if(sel&&sel.a===sel.b&&sel.a<P.length-1){p.t=P[sel.a].t;P.splice(sel.a+1,0,p);sel={a:sel.a+1,b:sel.a+1,anchor:sel.a+1};}
+    else{if(P.length)p.t=P[P.length-1].t;P.push(p);sel={a:P.length-1,b:P.length-1,anchor:P.length-1};}
+    afterEdit();return;
+  }
+  if(modo==='punto'){
+    pushUndo();const w={id:wid(),lat:ll.lat,lon:ll.lng,tipo:'nota',testo:''};act.wp.push(w);wsel=w.id;
+    setModo(null);afterEdit();setTimeout(()=>$('#wptesto').focus(),60);
+  }
+}
+$('#wptipo').innerHTML=Object.entries(TIPI_WP).map(([k,v])=>`<option value="${k}">${v.l}</option>`).join('');
+const wpSel=()=>act&&act.wp.find(w=>w.id===wsel);
+$('#wptipo').onchange=e=>{const w=wpSel();if(!w)return;pushUndo();w.tipo=e.target.value;afterEdit();};
+$('#wptesto').onfocus=()=>{if(wpSel())pushUndo();};
+$('#wptesto').oninput=e=>{const w=wpSel();if(!w)return;w.testo=e.target.value;act.dirty=true;renderWp();renderStats();renderServer();renderList();renderWpList();save();};
+$('#wpclose').onclick=()=>{wsel=null;renderWp();renderWpPanel();};
+$('#wpdel').onclick=()=>{const w=wpSel();if(!w)return;pushUndo();act.wp=act.wp.filter(x=>x!==w);wsel=null;afterEdit();toast('Punto eliminato');};
+$('#mdraw').onclick=()=>{setModo(modo==='disegna'?null:'disegna');if(modo)toast('Clicca sulla mappa per aggiungere punti. Esc per finire.');};
+$('#mwp').onclick=()=>setModo(modo==='punto'?null:'punto');
+$('#newg').onclick=()=>{
+  const g=mkLocal('Nuova gita',[]);g.color=PAL[gite.length%PAL.length];gite.push(g);
+  activate(g,false);setModo('disegna');save();
+  $('#name').focus();$('#name').select();toast('Scrivi il nome, poi clicca sulla mappa per disegnare il percorso.');
+};
+
 /* ---------- modifiche ---------- */
-function pushUndo(){act.undo.push(clone(act.pts));if(act.undo.length>200)act.undo.shift();act.redo=[];}
+const snap = g => ({pts:clone(g.pts),wp:cloneW(g.wp)});
+function ripristinaSnap(s){act.pts=s.pts;act.wp=s.wp;if(!act.wp.some(w=>w.id===wsel))wsel=null;}
+function pushUndo(){act.undo.push(snap(act));if(act.undo.length>200)act.undo.shift();act.redo=[];}
 function afterEdit(){
   act.dirty=true;
   if(sel){sel.a=Math.min(sel.a,act.pts.length-1);sel.b=Math.min(sel.b,act.pts.length-1);}
-  renderGita(act);renderVertices();renderSel();renderAnom();renderPanel();renderList();renderSeq();save();
+  renderGita(act);renderVertices();renderSel();renderAnom();renderWp();renderPanel();renderList();renderSeq();save();
 }
-function undo(){if(!act||!act.undo.length)return;act.redo.push(clone(act.pts));act.pts=act.undo.pop();sel=null;afterEdit();toast('Modifica annullata');}
-function redo(){if(!act||!act.redo.length)return;act.undo.push(clone(act.pts));act.pts=act.redo.pop();sel=null;afterEdit();}
+function undo(){if(!act||!act.undo.length)return;act.redo.push(snap(act));ripristinaSnap(act.undo.pop());sel=null;afterEdit();toast('Modifica annullata');}
+function redo(){if(!act||!act.redo.length)return;act.undo.push(snap(act));ripristinaSnap(act.redo.pop());sel=null;afterEdit();}
 
 const ACTIONS={
-  del(){const n=sel.b-sel.a+1;if(act.pts.length-n<2){toast('Una gita deve avere almeno due punti');return;}pushUndo();act.pts.splice(sel.a,n);sel=null;afterEdit();toast(n===1?'Punto eliminato':n+' punti eliminati');},
+  del(){const n=sel.b-sel.a+1;if(act.sid&&act.pts.length-n<2){toast('Una gita deve avere almeno due punti');return;}pushUndo();act.pts.splice(sel.a,n);sel=null;afterEdit();toast(n===1?'Punto eliminato':n+' punti eliminati');},
   tr(){setType('t');}, rc(){setType('r');},
   ts(){pushUndo();const n=sel.a;act.pts.splice(0,n);sel=null;afterEdit();toast('Rimossi '+n+' punti iniziali');},
   te(){pushUndo();const n=act.pts.length-sel.b-1;act.pts.splice(sel.b+1);sel=null;afterEdit();toast('Rimossi '+n+' punti finali');},
@@ -499,19 +623,21 @@ $('#name').oninput=e=>{act.name=e.target.value;act.dirty=act.name!==act.serverNa
 function send(payload){window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:setComponentValue',value:payload,dataType:'json'},'*');}
 $('#send').onclick=()=>{
   if(!USER){toast('Scrivi il tuo nome nella barra laterale prima di inviare');return;}
+  if(act.pts.length<2){toast('Disegna almeno due punti prima di inviare');return;}
   const note=$('#vnote').value.trim()||'Correzioni';
   const nonce=Date.now()+'-'+Math.random().toString(36).slice(2);
   if(act.sid)justSent.set(act.sid,nonce);
   $('#send').disabled=true;$('#send').textContent='Invio…';
   send({action:act.sid?'save':'create',gita_id:act.sid||null,base:act.base||null,name:act.name,note,local_id:act.id,
-    pts:act.pts.map(p=>[+p.lat.toFixed(6),+p.lon.toFixed(6),p.t]),nonce});
+    pts:act.pts.map(p=>[+p.lat.toFixed(6),+p.lon.toFixed(6),p.t]),
+    wpts:act.wp.map(w=>({lat:+w.lat.toFixed(6),lon:+w.lon.toFixed(6),tipo:w.tipo,testo:w.testo})),nonce});
 };
 $('#vnote').onkeydown=e=>{if(e.key==='Enter')$('#send').click();};
 $('#cmp').onclick=()=>{cmpOn=!cmpOn;renderCmp();if(cmpOn)toast('Versione del server in viola tratteggiato');};
 $('#discard').onclick=()=>{
   if(!confirm('Scartare la bozza di "'+act.name+'" e tornare alla versione del server?'))return;
-  pushUndo();act.pts=clone(act.server);act.name=act.serverName;$('#name').value=act.name;act.dirty=false;sel=null;
-  renderGita(act);renderVertices();renderSel();renderAnom();renderPanel();renderList();renderSeq();save();toast('Bozza scartata');
+  pushUndo();act.pts=clone(act.server);act.wp=cloneW(act.serverWp);wsel=null;act.name=act.serverName;$('#name').value=act.name;act.dirty=false;sel=null;
+  renderGita(act);renderVertices();renderSel();renderAnom();renderWp();renderPanel();renderList();renderSeq();save();toast('Bozza scartata');
 };
 $('#gapth').oninput=()=>{renderAnom();if(act)renderAnPanel();renderList();};
 $('#showinv').onchange=()=>{renderAnom();renderAnPanel();};
@@ -529,24 +655,32 @@ $('#delg').onclick=()=>{
 /* ---------- generale ---------- */
 function activate(g,fit){
   if(act===g){if(fit)fitAct();return;}
-  stopPlay();act=g;sel=null;cmpOn=false;seqOn=false;seqPos=0;$('#seq').value=0;
+  stopPlay();act=g;sel=null;wsel=null;cmpOn=false;seqOn=false;seqPos=0;$('#seq').value=0;
+  if(modo){modo=null;document.body.classList.remove('disegno');map.doubleClickZoom.enable();}
   if(!g.visible)g.visible=true;
   $('#name').value=g.name;
   gite.forEach(renderGita);renderAll(true);
   if(fit)fitAct();
 }
-function fitAct(){if(!act)return;map.fitBounds(L.latLngBounds(act.pts.map(p=>[p.lat,p.lon])),{padding:[40,40],animate:!RM});}
+function fitAct(){if(!act||!act.pts.length)return;if(act.pts.length===1){map.setView([act.pts[0].lat,act.pts[0].lon],17);return;}map.fitBounds(L.latLngBounds(act.pts.map(p=>[p.lat,p.lon])),{padding:[40,40],animate:!RM});}
 function fitAll(){const all=gite.flatMap(g=>g.pts.map(p=>[p.lat,p.lon]));if(all.length)map.fitBounds(L.latLngBounds(all),{padding:[30,30]});}
-function renderAll(skipLines){if(!skipLines)gite.forEach(renderGita);renderVertices();renderSel();renderAnom();renderCmp();renderPanel();renderList();renderSeq();}
+function renderAll(skipLines){if(!skipLines)gite.forEach(renderGita);renderVertices();renderSel();renderAnom();renderWp();renderCmp();renderPanel();renderList();renderSeq();}
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600);}
 
-map.on('moveend zoomend',renderVertices);
-map.on('click',()=>{if(sel){sel=null;refreshSel();}});
+map.on('moveend zoomend',()=>{renderVertices();renderWp();});
+map.on('click',e=>{
+  if(modo){clickMappa(e.latlng);return;}
+  if(wsel){wsel=null;renderWp();renderWpPanel();}
+  if(sel){sel=null;refreshSel();}
+});
 document.addEventListener('keydown',e=>{
   if(e.target.matches('input,textarea'))return;
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();}
   else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redo();}
+  else if(e.key==='Escape'&&modo){setModo(null);}
+  else if((e.key==='Delete'||e.key==='Backspace')&&wsel&&act){e.preventDefault();$('#wpdel').click();}
   else if((e.key==='Delete'||e.key==='Backspace')&&sel&&act){e.preventDefault();ACTIONS.del();}
+  else if(e.key==='Escape'&&wsel){wsel=null;renderWp();renderWpPanel();}
   else if(e.key==='Escape'&&sel){sel=null;refreshSel();}
 });
 
