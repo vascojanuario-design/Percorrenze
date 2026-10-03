@@ -414,6 +414,19 @@ class Archivio:
                           f"{m['nome']}: assegnazione aggiornata", autore)
             return True
 
+    def pubblica(self, gid: str, n: int, autore: str) -> None:
+        """Approva la versione n per la strada: è quella che vedranno gli operatori."""
+        with self.d.lock:
+            self.d.aggiorna(forza=True)
+            m = self.meta(gid)
+            if not any(v["n"] == n for v in m["versioni"]):
+                raise ValueError(f"La versione {n} non esiste")
+            m["pubblicata"] = {"n": n, "data": _adesso(), "autore": autore}
+            m.setdefault("eventi", []).append({"data": _adesso(), "autore": autore,
+                                              "azione": f"pubblicata la versione {n}"})
+            self.d.scrivi({f"{self._cartella(gid)}/meta.json": json.dumps(m, ensure_ascii=False, indent=2)},
+                          f"{m['nome']}: pubblicata la versione {n}", autore)
+
     # --- anagrafica condivisa (utenti, cantieri, mezzi)
 
     def leggi_doc(self, nome: str, predefinito: dict) -> dict:

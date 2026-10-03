@@ -144,7 +144,7 @@ with st.sidebar:
         cantiere_sel = st.selectbox("Cantiere", opzioni, format_func=nome_cantiere, key="cantiere_sel")
 
     mezzo_sel = TUTTI
-    if cantiere_sel and cantiere_sel not in (TUTTI, SENZA):
+    if cantiere_sel and cantiere_sel not in (TUTTI, SENZA) and ruolo != "operatore":
         mezzi_opz = [TUTTI] + an.mezzi_del_cantiere(flotte, cantiere_sel) + [SENZA]
         mezzo_sel = st.selectbox("Mezzo", mezzi_opz, key=f"mezzo_sel_{cantiere_sel}",
                                  format_func=lambda m: "Tutti i mezzi" if m == TUTTI else an.etichetta_mezzo(flotte, m))
@@ -296,12 +296,23 @@ def scheda_storico():
     c2.metric("Totale", f"{ultima['km_tot']:.1f} km".replace(".", ","))
     c3.metric("Raccolta", f"{ultima['km_raccolta']:.1f} km".replace(".", ","))
     c4.metric("Trasferimento", f"{ultima['km_trasferimento']:.1f} km".replace(".", ","))
+    pub = m.get("pubblicata")
+    if pub:
+        testo = (f"Approvata per la strada: versione {pub['n']}, pubblicata da {pub['autore']} "
+                 f"il {data_breve(pub['data'])}.")
+        if pub["n"] != ultima["n"]:
+            st.warning(testo + f" La versione {ultima['n']} non è ancora pubblicata: gli operatori vedono la {pub['n']}.")
+        else:
+            st.success(testo)
+    else:
+        st.info("Non ancora pubblicata: gli operatori non vedono questa gita.")
     st.dataframe(
-        [{"Versione": v["n"], "Data": data_breve(v["data"]), "Autore": v["autore"], "Nota": v["nota"],
+        [{"Versione": v["n"], "Stato": "Pubblicata" if pub and pub["n"] == v["n"] else "",
+          "Data": data_breve(v["data"]), "Autore": v["autore"], "Nota": v["nota"],
           "Km": v["km_tot"], "Punti": v["punti"]} for v in reversed(m["versioni"])],
         hide_index=True, width="stretch",
     )
-    col_v, col_dl, col_rip = st.columns(3, vertical_alignment="bottom")
+    col_v, col_dl, col_rip, col_pub = st.columns(4, vertical_alignment="bottom")
     n = col_v.selectbox("Versione", [v["n"] for v in reversed(m["versioni"])], key=f"ver_{m['id']}")
     col_dl.download_button("Scarica GPX", data=archivio.gpx(m["id"], n),
                            file_name=f"{m['nome']}_v{n}.gpx".replace(" ", "_"),
@@ -318,7 +329,13 @@ def scheda_storico():
             nuova = archivio.ripristina(m["id"], n, utente)
             avviso(f"La versione {n} è tornata attuale come versione {nuova}")
             st.rerun()
-    except ErroreArchivio as e:
+        if not mostra_archiviate and col_pub.button(f"Pubblica la versione {n}", type="primary", width="stretch",
+                                                    disabled=not modificabile or bool(pub and pub["n"] == n),
+                                                    help="Diventa la versione che vedono gli operatori"):
+            archivio.pubblica(m["id"], n, utente)
+            avviso(f"{m['nome']}: pubblicata la versione {n}")
+            st.rerun()
+    except (ErroreArchivio, ValueError) as e:
         st.error(str(e))
     for e in reversed(m.get("eventi", [])):
         st.caption(f"{data_breve(e['data'])}: {e['azione']} da {e['autore']}")
@@ -402,13 +419,16 @@ def scheda_flotta():
     st.caption("Aggiungi una riga per ogni mezzo. Per togliere un mezzo che ha gite, disattivalo invece di eliminarlo.")
     ids = an.mezzi_del_cantiere(flotte, cantiere_sel)
     df = pd.DataFrame([{"id": mid, "Codice": flotte["mezzi"][mid]["codice"], "Targa": flotte["mezzi"][mid].get("targa", ""),
-                        "Tipo": flotte["mezzi"][mid].get("tipo") or None, "Attivo": flotte["mezzi"][mid].get("attivo", True)}
-                       for mid in ids], columns=["id", "Codice", "Targa", "Tipo", "Attivo"])
+                        "Tipo": flotte["mezzi"][mid].get("tipo") or None, "Attivo": flotte["mezzi"][mid].get("attivo", True),
+                        "Operatori": ", ".join(an.utenti_del_mezzo(utenti_doc, mid))}
+                       for mid in ids], columns=["id", "Codice", "Targa", "Tipo", "Attivo", "Operatori"])
     mod = st.data_editor(df, num_rows="dynamic", hide_index=True, width="stretch", key=chiave(f"tab_mezzi_{cantiere_sel}"),
                          column_config={"id": None,
                                         "Codice": st.column_config.TextColumn(required=True, help="Per esempio 35"),
                                         "Tipo": st.column_config.SelectboxColumn(options=an.TIPI_MEZZO),
-                                        "Attivo": st.column_config.CheckboxColumn(default=True)})
+                                        "Attivo": st.column_config.CheckboxColumn(default=True),
+                                        "Operatori": st.column_config.TextColumn(
+                                            disabled=True, help="Chi ha questo mezzo come abituale: si imposta nella scheda Utenti")})
     if st.button("Salva mezzi", key="salva_mezzi"):
         try:
             archivio.modifica_doc("flotte", an.FLOTTE_VUOTO,
@@ -432,9 +452,11 @@ def scheda_flotta():
                "Mezzo": st.column_config.SelectboxColumn(options=list(codici)),
                "N. gita": st.column_config.NumberColumn(min_value=1, max_value=20, step=1),
                "Turno": st.column_config.SelectboxColumn(options=an.TURNI),
-               "Giorni": st.column_config.TextColumn(help="Lun-Sab, Lun Mer Ven, Tutti i giorni")}
+               "Giorni": st.column_config.TextColumn(help="Lun-Sab, Lun Mer Ven, Tutti i giorni"),
+               "Pubblicata": st.column_config.TextColumn(disabled=True, help="Versione che vedono gli operatori")}
     dati = [{"id": m["id"], "Gita": m["nome"], "Mezzo": per_id.get(m.get("mezzo")), "N. gita": m.get("numero"),
-             "Turno": m.get("turno"), "Giorni": an.scrivi_giorni(m.get("giorni"))} for m in gite]
+             "Turno": m.get("turno"), "Giorni": an.scrivi_giorni(m.get("giorni")), "Pubblicata": stato_pubblicazione(m)}
+            for m in gite]
     if amministratore:
         colonne["Cantiere"] = st.column_config.SelectboxColumn(options=sorted(cantieri_nomi),
                                                                help="Per spostare la gita in un altro cantiere")
@@ -456,6 +478,28 @@ def scheda_flotta():
         except (ValueError, ErroreArchivio) as e:
             st.error(str(e))
 
+    da_pubblicare = [m for m in gite if (m.get("pubblicata") or {}).get("n") != m["versioni"][-1]["n"]]
+    if da_pubblicare:
+        with st.expander(f"Pubblicazione rapida: {len(da_pubblicare)} gite con una versione non pubblicata"):
+            st.write("Pubblica in un colpo l'ultima versione di queste gite. Fallo solo se le hai controllate: "
+                     "da quel momento sono quelle che vedono gli operatori.")
+            st.caption(", ".join(m["nome"] for m in da_pubblicare))
+            conferma = st.checkbox("Le ho controllate")
+            if st.button("Pubblica le ultime versioni", disabled=not conferma):
+                try:
+                    for m in da_pubblicare:
+                        archivio.pubblica(m["id"], m["versioni"][-1]["n"], utente)
+                    salvato(f"Pubblicate {len(da_pubblicare)} gite")
+                except (ValueError, ErroreArchivio) as e:
+                    st.error(str(e))
+
+
+def stato_pubblicazione(m: dict) -> str:
+    pub, ultima = m.get("pubblicata"), m["versioni"][-1]["n"]
+    if not pub:
+        return "No"
+    return f"v{pub['n']}" + (f" (ultima v{ultima})" if pub["n"] != ultima else "")
+
 
 # ================================================================ utenti (solo amministratore)
 
@@ -463,6 +507,14 @@ def scheda_utenti():
     utenti = utenti_doc["utenti"]
     cantieri_nomi = {c["nome"]: cid for cid, c in flotte["cantieri"].items()}
     nome_di = {cid: n for n, cid in cantieri_nomi.items()}
+    tutti_mezzi = [None] + sorted(flotte["mezzi"], key=lambda k: (nome_di.get(flotte["mezzi"][k]["cantiere"], ""),
+                                                                   an._ordinabile(flotte["mezzi"][k]["codice"])))
+
+    def nome_mezzo(k):
+        if not k:
+            return "Nessuno"
+        return f"{nome_di.get(flotte['mezzi'][k]['cantiere'], '?')}: {an.etichetta_mezzo(flotte, k)}"
+
     if ADMIN:
         st.caption(f"Oltre a questi utenti, l'accesso '{ADMIN.get('utente')}' dei Secrets è sempre amministratore: "
                    "tienilo come accesso di emergenza.")
@@ -470,6 +522,7 @@ def scheda_utenti():
         st.dataframe([{"Utente": k, "Nome": u["nome"], "Ruolo": an.RUOLI.get(u["ruolo"], u["ruolo"]),
                        "Cantieri": "Tutti" if u["ruolo"] == "amministratore"
                        else ", ".join(nome_di.get(c, "?") for c in u.get("cantieri", [])),
+                       "Mezzo abituale": nome_mezzo(u.get("mezzo")) if u.get("mezzo") in flotte["mezzi"] else "",
                        "Attivo": "Sì" if u.get("attivo", True) else "No"} for k, u in sorted(utenti.items())],
                      hide_index=True, width="stretch")
     else:
@@ -482,11 +535,15 @@ def scheda_utenti():
         nn = st.text_input("Nome e cognome")
         nr = st.selectbox("Ruolo", list(an.RUOLI), format_func=an.RUOLI.get, index=1)
         nc = st.multiselect("Cantieri", sorted(cantieri_nomi), help="Non serve per gli amministratori")
+        nm = st.selectbox("Mezzo abituale", tutti_mezzi, format_func=nome_mezzo,
+                          help="Per gli operatori: il mezzo che guidano di solito")
         npw = st.text_input("Password iniziale", type="password", help="Almeno 8 caratteri. Comunicala di persona.")
         if st.form_submit_button("Crea utente", type="primary"):
             try:
+                cs = [cantieri_nomi[x] for x in nc]
+                an.controlla_mezzo(flotte, nm, cs)
                 archivio.modifica_doc("utenti", an.UTENTI_VUOTO,
-                                      lambda d: an.crea_utente(d, nu, nn, nr, [cantieri_nomi[x] for x in nc], npw),
+                                      lambda d: an.crea_utente(d, nu, nn, nr, cs, npw, mezzo=nm),
                                       f"Nuovo utente {nu}", utente)
                 avviso(f"Utente {nu} creato")
                 st.rerun()
@@ -504,12 +561,16 @@ def scheda_utenti():
             mr = st.selectbox("Ruolo", list(an.RUOLI), format_func=an.RUOLI.get, index=list(an.RUOLI).index(u["ruolo"]))
             mc = st.multiselect("Cantieri", sorted(cantieri_nomi),
                                 default=[nome_di[c] for c in u.get("cantieri", []) if c in nome_di])
+            mm = st.selectbox("Mezzo abituale", tutti_mezzi, format_func=nome_mezzo,
+                              index=tutti_mezzi.index(u["mezzo"]) if u.get("mezzo") in tutti_mezzi else 0)
             ma = st.checkbox("Attivo", u.get("attivo", True))
             mpw = st.text_input("Nuova password", type="password", help="Lascia vuoto per non cambiarla")
             if st.form_submit_button("Salva"):
                 try:
+                    cs = [cantieri_nomi[x] for x in mc]
+                    an.controlla_mezzo(flotte, mm, cs)
                     archivio.modifica_doc("utenti", an.UTENTI_VUOTO,
-                                          lambda d: an.aggiorna_utente(d, scelto, mn, mr, [cantieri_nomi[x] for x in mc], ma, mpw),
+                                          lambda d: an.aggiorna_utente(d, scelto, mn, mr, cs, ma, mpw, mezzo=mm),
                                           f"Utente {scelto} aggiornato", utente)
                     avviso(f"Utente {scelto} aggiornato")
                     st.rerun()
@@ -519,21 +580,78 @@ def scheda_utenti():
 
 # ================================================================ operatori
 
+GIORNI_ESTESI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+
+
 def scheda_operatore():
-    st.subheader(f"Gite di {nome_cantiere(cantiere_sel)}")
-    st.caption("Scarica la gita e aprila con OsmAnd per seguirla. Più avanti qui compariranno solo le gite "
-               "approvate per la strada.")
-    if not attive:
-        st.write("Nessuna gita in questa selezione.")
+    ora = an.adesso()
+    oggi = ora.date().isoformat()
+    mezzi_cantiere = an.mezzi_del_cantiere(flotte, cantiere_sel, solo_attivi=True)
+    mio = chi.get("mezzo") if chi.get("mezzo") in flotte["mezzi"] else None
+    sost = st.session_state.get("sostituzione")
+    if sost and sost[0] != oggi:
+        sost = None
+        st.session_state.pop("sostituzione", None)
+    mezzo = sost[1] if sost else mio
+
+    quando = st.radio("Giorno", ["Oggi", "Domani"], horizontal=True, label_visibility="collapsed")
+    idx = (ora.weekday() + (1 if quando == "Domani" else 0)) % 7
+    giorno = an.GIORNI[idx]
+
+    if mezzo:
+        st.header(f"Mezzo {an.etichetta_mezzo(flotte, mezzo)}")
+        st.caption(f"{quando}, {GIORNI_ESTESI[idx]}" + (". Stai sostituendo un collega su questo mezzo." if sost else ""))
+    else:
+        st.header("Scegli il mezzo")
+        st.caption("Non hai un mezzo abituale: scegli quello che guidi oggi.")
+
+    with st.expander("Oggi guido un altro mezzo" if mezzo else "Mezzi del cantiere", expanded=not mezzo):
+        altri = [m for m in mezzi_cantiere if m != mezzo]
+        if altri:
+            scelta = st.selectbox("Mezzo", altri, format_func=lambda k: an.etichetta_mezzo(flotte, k))
+            if st.button("Usa questo mezzo per oggi", type="primary", width="stretch"):
+                st.session_state.sostituzione = (oggi, scelta)
+                st.rerun()
+        if sost and mio and st.button("Torna al mio mezzo", width="stretch"):
+            st.session_state.pop("sostituzione", None)
+            st.rerun()
+    if not mezzo:
         return
-    for m in attive:
-        ultima = m["versioni"][-1]
+
+    del_mezzo = [m for m in archivio.elenco() if m.get("mezzo") == mezzo]
+    approvate = [m for m in del_mezzo if m.get("pubblicata")]
+    previste = sorted([m for m in approvate if not m.get("giorni") or giorno in m["giorni"]],
+                      key=lambda m: (an.TURNI.index(m["turno"]) if m.get("turno") in an.TURNI else 9, m.get("numero") or 99))
+    in_corso = an.turno_attuale() if quando == "Oggi" else None
+
+    if not previste:
+        st.info(f"Nessuna gita approvata per {GIORNI_ESTESI[idx]} su questo mezzo.")
+    for m in previste:
+        pub = m["pubblicata"]
+        v = next(x for x in m["versioni"] if x["n"] == pub["n"])
+        titolo = (f"Gita {m['numero']}" if m.get("numero") else m["nome"]) + (f", {m['turno'].lower()}" if m.get("turno") else "")
         with st.container(border=True):
-            st.markdown(f"**{m['nome']}**")
-            st.caption(f"{descrizione_gita(m)}, {ultima['km_tot']:.1f} km".replace(".", ","))
-            st.download_button("Scarica GPX", data=archivio.gpx(m["id"], ultima["n"]),
+            st.markdown(f"**{titolo}**" + ("  \n:orange[turno in corso]" if m.get("turno") == in_corso else ""))
+            st.caption(f"{m['nome']}, {v['km_tot']:.1f} km".replace(".", ","))
+            st.download_button("Scarica il giro", data=archivio.gpx(m["id"], pub["n"]), type="primary",
                                file_name=f"{m['nome']}.gpx".replace(" ", "_"), mime="application/gpx+xml",
                                key=f"dl_{m['id']}", width="stretch")
+    if previste:
+        st.caption("Dopo il download apri il file e scegli OsmAnd, oppure da OsmAnd usa Importa.")
+    mancanti = len(del_mezzo) - len(approvate)
+    if mancanti:
+        st.caption(f"{mancanti} gite di questo mezzo non sono ancora approvate e non compaiono qui.")
+
+    altre = sorted([m for m in archivio.elenco() if m.get("cantiere") == cantiere_sel and m.get("pubblicata")
+                    and m.get("mezzo") != mezzo], key=ordine)
+    if altre:
+        with st.expander("Tutte le altre gite approvate del cantiere"):
+            for m in altre:
+                c1, c2 = st.columns([3, 1], vertical_alignment="center")
+                c1.write(f"{m['nome']}  \n{descrizione_gita(m)}")
+                c2.download_button("Scarica", data=archivio.gpx(m["id"], m["pubblicata"]["n"]),
+                                   file_name=f"{m['nome']}.gpx".replace(" ", "_"), mime="application/gpx+xml",
+                                   key=f"dla_{m['id']}")
 
 
 # ================================================================ schede

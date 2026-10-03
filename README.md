@@ -27,6 +27,12 @@ Gli altri utenti si creano dalla scheda **Utenti**. Ognuno può cambiare la prop
 
 Ogni gita appartiene a un cantiere e a un mezzo; un mezzo può avere più gite (gita 1, 2, 3…), ognuna con turno e giorni. Si gestisce tutto dalla scheda **Flotta**, scegliendo il cantiere nella barra laterale. Le gite importate senza cantiere compaiono all'amministratore sotto "Senza cantiere", da dove si assegnano.
 
+## Pubblicazione e pagina per gli operatori
+
+Una correzione inviata non arriva subito sul mezzo. Un responsabile o l'amministratore la **pubblica** dalla scheda Storico versioni (oppure in blocco dalla scheda Flotta): da quel momento è la versione che vedono gli operatori.
+
+L'operatore ha un **mezzo abituale**, impostato nella scheda Utenti. Quando entra dal telefono vede le gite pubblicate del suo mezzo previste per oggi (o domani), ordinate per turno e numero, e scarica il giro da aprire in OsmAnd. Se guida un altro mezzo, lo sceglie con "Oggi guido un altro mezzo": vale solo per quel giorno.
+
 ## Come funziona per chi lo usa
 
 1. Si entra con il proprio utente e si sceglie il cantiere nella barra laterale.

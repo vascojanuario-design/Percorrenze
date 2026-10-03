@@ -14,6 +14,10 @@ import hmac
 import re
 import secrets
 import uuid
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+FUSO = ZoneInfo("Europe/Rome")
 
 RUOLI = {
     "amministratore": "Amministratore",
@@ -73,7 +77,7 @@ def accedi(utenti_doc: dict, admin_cfg: dict | None, utente: str, password: str)
     if admin_cfg and utente and utente == str(admin_cfg.get("utente", "")).strip().lower():
         if hmac.compare_digest(password.encode(), str(admin_cfg.get("password", "")).encode()) and admin_cfg.get("password"):
             return {"utente": utente, "nome": admin_cfg.get("nome", "Amministratore"), "ruolo": "amministratore",
-                    "cantieri": [], "da_secrets": True}
+                    "cantieri": [], "mezzo": None, "da_secrets": True}
         return None
     u = utenti_doc.get("utenti", {}).get(utente)
     if u and u.get("attivo", True) and verifica(password, u.get("password", {})):
@@ -83,7 +87,7 @@ def accedi(utenti_doc: dict, admin_cfg: dict | None, utente: str, password: str)
 
 def sessione(utente: str, u: dict) -> dict:
     return {"utente": utente, "nome": u.get("nome") or utente, "ruolo": u.get("ruolo", "operatore"),
-            "cantieri": list(u.get("cantieri", [])), "da_secrets": False}
+            "cantieri": list(u.get("cantieri", [])), "mezzo": u.get("mezzo"), "da_secrets": False}
 
 
 def rinfresca(utenti_doc: dict, chi: dict) -> dict | None:
@@ -98,7 +102,8 @@ def rinfresca(utenti_doc: dict, chi: dict) -> dict | None:
 
 # ---------------------------------------------------------------- modifiche utenti
 
-def crea_utente(doc: dict, utente: str, nome: str, ruolo: str, cantieri: list[str], password: str) -> None:
+def crea_utente(doc: dict, utente: str, nome: str, ruolo: str, cantieri: list[str], password: str,
+                mezzo: str | None = None) -> None:
     utente = controlla_nome_utente(utente)
     if utente in doc["utenti"]:
         raise ValueError(f"Esiste già un utente '{utente}'")
@@ -106,17 +111,18 @@ def crea_utente(doc: dict, utente: str, nome: str, ruolo: str, cantieri: list[st
         raise ValueError("Ruolo non valido")
     controlla_password(password)
     doc["utenti"][utente] = {"nome": nome.strip() or utente, "ruolo": ruolo, "cantieri": list(cantieri),
-                             "attivo": True, "password": cifra(password)}
+                             "mezzo": mezzo, "attivo": True, "password": cifra(password)}
 
 
 def aggiorna_utente(doc: dict, utente: str, nome: str, ruolo: str, cantieri: list[str], attivo: bool,
-                    nuova_password: str = "") -> None:
+                    nuova_password: str = "", mezzo: str | None = None) -> None:
     u = doc["utenti"].get(utente)
     if not u:
         raise ValueError(f"L'utente '{utente}' non esiste")
     if ruolo not in RUOLI:
         raise ValueError("Ruolo non valido")
-    u.update({"nome": nome.strip() or utente, "ruolo": ruolo, "cantieri": list(cantieri), "attivo": bool(attivo)})
+    u.update({"nome": nome.strip() or utente, "ruolo": ruolo, "cantieri": list(cantieri), "attivo": bool(attivo),
+              "mezzo": mezzo})
     if nuova_password:
         controlla_password(nuova_password)
         u["password"] = cifra(nuova_password)
@@ -128,6 +134,32 @@ def cambia_password(doc: dict, utente: str, attuale: str, nuova: str) -> None:
         raise ValueError("La password attuale non è corretta")
     controlla_password(nuova)
     u["password"] = cifra(nuova)
+
+
+def controlla_mezzo(flotte: dict, mezzo: str | None, cantieri: list[str]) -> None:
+    """Il mezzo abituale deve appartenere a uno dei cantieri dell'utente."""
+    if mezzo and flotte["mezzi"].get(mezzo, {}).get("cantiere") not in cantieri:
+        raise ValueError("Il mezzo abituale deve essere di uno dei cantieri dell'utente")
+
+
+def utenti_del_mezzo(utenti_doc: dict, mezzo: str) -> list[str]:
+    return sorted(u["nome"] for u in utenti_doc.get("utenti", {}).values()
+                  if u.get("mezzo") == mezzo and u.get("attivo", True))
+
+
+# ---------------------------------------------------------------- calendario
+
+def adesso() -> datetime:
+    return datetime.now(FUSO)
+
+
+def giorno_oggi() -> str:
+    return GIORNI[adesso().weekday()]
+
+
+def turno_attuale() -> str:
+    ora = adesso().hour
+    return "Mattina" if 4 <= ora < 13 else "Pomeriggio" if 13 <= ora < 21 else "Notte"
 
 
 # ---------------------------------------------------------------- flotte

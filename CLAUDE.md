@@ -45,6 +45,9 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 - Ogni azione dell'editor verifica i permessi lato server (`puo_modificare`).
 - Le tabelle della scheda Flotta usano `st.data_editor`; la chiave cambia dopo ogni salvataggio (`chiave()`), così ripartono dai dati salvati.
 - La sessione vive in `st.session_state`: ricaricando la pagina si rientra.
+- Pubblicazione: `meta.json` ha `pubblicata` = {n, data, autore}, impostato con `Archivio.pubblica()`. Gli operatori vedono solo la versione pubblicata, mai l'ultima bozza.
+- Utenti: campo `mezzo` (mezzo abituale, deve appartenere a uno dei cantieri dell'utente, `controlla_mezzo`).
+- Pagina operatore: gite pubblicate del mezzo per il giorno (fuso Europe/Rome, `an.adesso()`), ordinate per turno e numero; sostituzione giornaliera in `st.session_state.sostituzione` = (data, mezzo).
 
 ### Punti e tratti
 - Un punto è `[lat, lon, tipo]`, con tipo `"r"` (raccolta) o `"t"` (trasferimento).
@@ -83,12 +86,12 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 
 ## Prossimi passi, in ordine
 
-Fatto: accessi con ruoli, cantieri, mezzi, assegnazione delle gite (mezzo, numero, turno, giorni), pagina semplice per gli operatori.
+Fatto: accessi con ruoli, cantieri, mezzi, assegnazione delle gite (mezzo, numero, turno, giorni), pubblicazione delle versioni, mezzo abituale degli operatori, vista "Oggi" con sostituzioni.
 
-1. **Stato "pubblicata".** Non ogni versione inviata deve arrivare sul mezzo. Serve un'approvazione esplicita (responsabile o amministratore): per ogni gita si ricorda la versione pubblicata, chi l'ha approvata e quando. La pagina operatori deve poi mostrare solo la versione pubblicata.
-2. **Pagina per i mezzi, pensata per il telefono.** Partire dalla scheda operatore esistente: gite del giorno per mezzo e turno, pulsante grande per aprire in OsmAnd, QR stampabile per ogni mezzo.
-3. **Pilota con OsmAnd** su due o tre gite: verificare se la navigazione lungo la traccia regge i ripassi.
-4. **Guida propria (web app installabile)**, se il pilota mostra che serve: mappa offline, schermo sempre acceso, logica "Segui".
+Telefoni degli operatori: Samsung e Redmi (Android), personali o assegnati alla persona; il mezzo è legato alla persona.
+
+1. **Pilota con OsmAnd** su due o tre gite: verificare se la navigazione lungo la traccia regge i ripassi.
+2. **App per gli operatori (web app installabile su Android)**, separata da Streamlit: accesso che resta sul telefono, vista "Oggi", guida integrata con la logica "Segui" (tratto attuale e prossimi 300 m), ripasso animato del giro prima del turno, note sui punti critici, mappa offline, segnalazioni con foto, conferma di fine giro senza tracciamento GPS. Sui Redmi va tolta la restrizione della batteria.
 5. **App nativa e registrazione delle tracce** per la fase di verifica.
 
 Più avanti: aggancio automatico alle strade (Valhalla, profilo camion), punti di raccolta lungo il percorso, collegamento con il modulo di gestione esistente, database PostGIS.
@@ -97,7 +100,6 @@ Più avanti: aggancio automatico alle strade (Valhalla, profilo camion), punti d
 
 ## Domande ancora aperte
 
-- Telefoni degli operatori: personali, aziendali o tablet sul mezzo? Android o iPhone?
 - Nei nomi delle gite, "35" è il numero del mezzo (probabile: ogni mezzo ha le sue gite numerate).
 - Regola di nomenclatura delle gite (proposta: zona, mezzo, turno, numero gita).
 - La gita 1 camion è una versione superata o un servizio diverso sulle stesse strade?
