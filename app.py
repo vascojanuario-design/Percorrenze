@@ -16,6 +16,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import anagrafica as an
+import strade
 from archivio import Conflitto, ErroreArchivio, apri, distanza, leggi_gpx, leggi_waypoint, pulisci
 
 BASE = Path(__file__).parent
@@ -72,6 +73,7 @@ except ErroreArchivio as e:
     st.stop()
 
 ADMIN = segreti("amministratore")
+CHIAVE_STRADE = segreti("openrouteservice").get("chiave", "")
 
 
 def data_breve(iso: str) -> str:
@@ -255,6 +257,13 @@ def gestisci(risposta, dest_cantiere: str | None, dest_mezzo: str | None) -> Non
         return
     st.session_state.ultimo_nonce = risposta["nonce"]
     azione, gid, nonce, stato = risposta.get("action"), risposta.get("gita_id"), risposta["nonce"], risposta.get("stato")
+    if azione == "instrada":
+        try:
+            punti = strade.instrada(CHIAVE_STRADE, risposta["da"], risposta["a"])
+            st.session_state.instr = {"nonce": nonce, "punti": punti}
+        except strade.ErroreStrade as e:
+            st.session_state.instr = {"nonce": nonce, "errore": str(e)}
+        st.rerun()
     nome = risposta.get("name") or "Gita senza nome"
     try:
         if azione in ("save", "archive") and not puo_modificare(archivio.meta(gid)):
@@ -329,7 +338,8 @@ def pagina_crea():
     bozze = sorted([m for m in archivio.elenco(bozze=True) if m.get("cantiere") == cant], key=lambda m: m["nome"].lower())
     risposta = editor(data=dati_per_editor(bozze), data_version=f"{archivio.impronta()}|crea|{cant}", user=utente,
                       msg=st.session_state.get("msg"), height=ALTEZZA_EDITOR, mode="crea",
-                      seleziona=st.session_state.get("crea_seleziona"), key="editor_crea", default=None)
+                      seleziona=st.session_state.get("crea_seleziona"), strade=bool(CHIAVE_STRADE),
+                      instradamento=st.session_state.get("instr"), key="editor_crea", default=None)
     gestisci(risposta, cant, mez)
 
 
@@ -621,17 +631,25 @@ def badge_stato(m: dict) -> str:
 def carica_gpx(dest_cantiere: str | None, chiave_ui: str) -> None:
     st.caption(f"Le gite caricate andranno in: **{nome_cantiere(dest_cantiere)}**")
     chiave_upload = f"upload_{chiave_ui}_{st.session_state.get('upload_n', 0)}"
-    nuovi = st.file_uploader("File GPX", type=["gpx"], accept_multiple_files=True, key=chiave_upload,
-                             label_visibility="collapsed")
+    nuovi = st.file_uploader("File GPX, Excel o CSV", type=["gpx", "xlsx", "xls", "csv"], accept_multiple_files=True,
+                             key=chiave_upload, label_visibility="collapsed")
+    st.caption("Da Excel o CSV servono le colonne di **latitudine** e **longitudine**, nell'ordine di percorrenza. "
+               "Facoltative: gita (una gita per ogni nome), ordine, tipo (raccolta/trasferimento), lato "
+               "(destro/sinistro/entrambi), nota.")
     if nuovi and st.button("Importa", type="primary", width="stretch", key=f"importa_{chiave_ui}"):
         for f in nuovi:
             try:
-                nome, pts = leggi_gpx(f.getvalue(), f.name)
-                pts, rimossi = pulisci(pts)
-                archivio.crea(nome, pts, utente,
-                              f"Importata da {f.name}" + (f", rimossi {rimossi} punti doppi" if rimossi else ""),
-                              cantiere=dest_cantiere, waypoint=leggi_waypoint(f.getvalue()))
-                avviso(f"Importata: {nome}")
+                if f.name.lower().endswith(".gpx"):
+                    nome, pts = leggi_gpx(f.getvalue(), f.name)
+                    gite_file = [{"nome": nome, "punti": pts, "waypoint": leggi_waypoint(f.getvalue())}]
+                else:
+                    gite_file = strade.leggi_tabella(f.getvalue(), f.name)
+                for g in gite_file:
+                    pts, rimossi = pulisci(g["punti"])
+                    archivio.crea(g["nome"], pts, utente,
+                                  f"Importata da {f.name}" + (f", rimossi {rimossi} punti doppi" if rimossi else ""),
+                                  cantiere=dest_cantiere, waypoint=g["waypoint"])
+                    avviso(f"Importata: {g['nome']}")
             except (ValueError, ErroreArchivio) as e:
                 avviso(str(e), ok=False)
         st.session_state.upload_n = st.session_state.get("upload_n", 0) + 1
@@ -702,7 +720,7 @@ def pagina_home():
     a1, a2, a3, a4 = st.columns(4)
     if a1.button("Nuova gita", icon=":material/add_road:", width="stretch", type="primary"):
         vai_a("nuove")
-    if a2.button("Carica GPX", icon=":material/upload_file:", width="stretch"):
+    if a2.button("Carica GPX o Excel", icon=":material/upload_file:", width="stretch"):
         vai_a("elenco", apri_caricamento=True)
     if a3.button("Elenco gite", icon=":material/list:", width="stretch"):
         vai_a("elenco")
@@ -751,11 +769,10 @@ def pagina_elenco():
                                   key="elenco_filtro", label_visibility="collapsed")
     if ruolo != "operatore":
         dest = cantiere_sel if cantiere_sel not in (TUTTI, SENZA) else None
-        with c3.popover("Carica GPX", icon=":material/upload_file:", width="stretch",
-                        ):
+        with c3.popover("Carica GPX o Excel", icon=":material/upload_file:", width="stretch"):
             carica_gpx(dest, "elenco")
     if st.session_state.pop("apri_caricamento", False):
-        st.info("Usa il pulsante **Carica GPX** qui sopra a destra.", icon=":material/upload_file:")
+        st.info("Usa il pulsante **Carica GPX o Excel** qui sopra a destra.", icon=":material/upload_file:")
 
     tutte = [m for m in archivio.tutte() if nel_filtro(m)]
     filtri = {"Attive": lambda m: stato_gita(m).startswith("Attiva"),
@@ -943,7 +960,8 @@ def pagina_editor():
     gite = sorted([m for m in archivio.elenco() if nel_filtro(m, mezzo)], key=ordine)
     risposta = editor(data=dati_per_editor(gite), data_version=f"{archivio.impronta()}|{cantiere_sel}|{mezzo}",
                       user=utente, msg=st.session_state.get("msg"), height=ALTEZZA_EDITOR,
-                      seleziona=st.session_state.get("editor_seleziona"), key="editor", default=None)
+                      seleziona=st.session_state.get("editor_seleziona"), strade=bool(CHIAVE_STRADE),
+                      instradamento=st.session_state.get("instr"), key="editor", default=None)
     gestisci(risposta, cantiere_sel if cantiere_sel not in (TUTTI, SENZA) else None,
              mezzo if mezzo not in (TUTTI, SENZA) else None)
 
@@ -970,6 +988,14 @@ def pagina_impostazioni():
     c[1].metric("Versioni salvate", sum(len(m["versioni"]) for m in tutte), border=True)
     c[2].metric("Cantieri", len(flotte["cantieri"]), border=True)
     c[3].metric("Utenti", len(utenti_doc["utenti"]), border=True)
+    st.subheader("Aggancio alle strade")
+    if CHIAVE_STRADE:
+        st.markdown(":green-badge[Attivo] &nbsp; Nell'editor, in modalità disegno, i tratti seguono le strade "
+                    "(OpenRouteService, profilo mezzi pesanti).")
+    else:
+        st.markdown(":gray-badge[Non configurato]")
+        st.caption("Per disegnare i tratti lungo le strade: registrati gratis su openrouteservice.org, crea una chiave "
+                   "(API key) e aggiungi nei Secrets dell'app la sezione `[openrouteservice]` con `chiave = \"...\"`.")
     st.subheader("Accesso")
     st.write(f"Sei collegato come **{chi['nome']}** ({an.RUOLI[ruolo].lower()}).")
     if ADMIN:

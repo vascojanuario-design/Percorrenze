@@ -106,6 +106,22 @@ button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-d
 .an.gap{background:var(--warn)}.an.spike{background:var(--spike)}.an.inv{background:#6C7A80}
 .pos{background:var(--warn);border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 1px var(--warn)}
 .leaflet-container{font-family:var(--f)}
+.freccia{pointer-events:none}
+.freccia svg{display:block}
+#cerca{position:relative;flex:1 1 220px;min-width:180px;max-width:320px}
+#cerca input{width:100%;font:500 14px var(--f);padding:8px 12px;border:1px solid var(--line);border-radius:6px;box-shadow:0 1px 6px rgba(28,42,46,.22)}
+#cercarisultati{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:6px;margin-top:4px;list-style:none;padding:4px 0;z-index:900;box-shadow:0 4px 14px rgba(0,0,0,.18);max-height:260px;overflow:auto}
+#cercarisultati li{padding:7px 10px;font-size:14px;cursor:pointer}
+#cercarisultati li:hover{background:#EAF0EE}
+#cercarisultati small{display:block;color:var(--ink2);font-size:12px}
+#mtools label.strade{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:6px 10px;font:600 14px var(--f);box-shadow:0 1px 6px rgba(28,42,46,.22)}
+.lati{display:grid;grid-template-columns:auto 1fr 1fr 1fr 1fr;gap:6px;align-items:center;margin-top:8px;font-size:13px}
+.lati button{padding:5px 4px;font-size:13px;justify-content:center}
+#durata{font-size:13px;color:var(--ink2);margin:2px 0 4px}
+.velocita{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;color:var(--ink2);margin-top:8px}
+.velocita input{width:56px;font:inherit;padding:2px 4px;border:1px solid var(--line);border-radius:4px}
+.legenda{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin-top:6px}
+.legenda i{display:inline-block;width:18px;height:0;border-top:3px dashed #E8590C;vertical-align:middle;margin-right:4px}
 .solo-crea{display:none!important}
 body.modo-crea .solo-crea{display:revert!important}
 body.modo-crea .solo-editor{display:none!important}
@@ -151,6 +167,7 @@ body:not(.modo-crea) #altre>summary{display:none}
   <section id="act" hidden>
     <input id="name" aria-label="Nome della gita" placeholder="Zona, mezzo, turno, numero gita">
     <div id="stats"></div>
+    <div id="durata"></div>
     <p id="state"></p>
     <div class="tools">
       <button id="undo" title="Ctrl+Z">Annulla</button>
@@ -185,9 +202,18 @@ body:not(.modo-crea) #altre>summary{display:none}
           <button data-a="rc">Segna raccolta</button>
           <button data-a="ts">Taglia inizio fin qui</button>
           <button data-a="te">Taglia fine da qui</button>
+          <button data-a="ritorno" title="Aggiunge subito dopo il tratto selezionato lo stesso tratto al contrario: per vicoli ciechi e strade senza uscita">Aggiungi il ritorno</button>
+          <button data-a="copia" title="Copia un tratto da un'altra gita e lo inserisce dopo il punto selezionato (o alla fine)">Copia da un'altra gita</button>
         </div>
+        <div class="lati"><span>Lato di raccolta</span>
+          <button data-l="d" title="Raccolta sul lato destro, nel senso di marcia">Destro</button>
+          <button data-l="s" title="Raccolta sul lato sinistro, nel senso di marcia">Sinistro</button>
+          <button data-l="e">Entrambi</button>
+          <button data-l="">Nessuno</button>
+        </div>
+        <div class="legenda"><span><i></i>lato di raccolta indicato</span><span>▸ senso di marcia</span></div>
       </div>
-      <p class="help" style="margin-top:8px">Clic su un punto per selezionarlo, <kbd>Maiusc</kbd>+clic per estendere a un tratto. Trascina un punto per spostarlo, clicca un cerchio tratteggiato per aggiungerne uno. <kbd>Canc</kbd> elimina, <kbd>Esc</kbd> deseleziona.</p>
+      <p class="help" style="margin-top:8px">Clic su un punto per selezionarlo, <kbd>Maiusc</kbd>+clic per estendere a un tratto. Trascina un punto per spostarlo, clicca un cerchio tratteggiato per aggiungerne uno. <kbd>Canc</kbd> elimina, <kbd>Esc</kbd> deseleziona. Scorciatoie: <kbd>D</kbd> disegna, <kbd>P</kbd> punto d'interesse, <kbd>F</kbd> inquadra, <kbd>Ctrl</kbd>+<kbd>S</kbd> salva.</p>
 
       <h3>Da verificare <span class="count" id="ancount"></span></h3>
       <div class="anopts">
@@ -197,6 +223,11 @@ body:not(.modo-crea) #altre>summary{display:none}
       <ul id="anlist"></ul>
       <button class="link" id="unign" hidden></button>
       <div class="actions"><button id="rev">Inverti senso</button></div>
+      <h3>Unisci un'altra gita</h3>
+      <div class="saverow"><select id="unisci" aria-label="Gita da unire" style="flex:1;min-width:0;font:inherit;font-size:14px;padding:5px;border:1px solid var(--line);border-radius:6px"></select><button id="unisciok">Aggiungi in coda</button></div>
+      <p class="help">La gita scelta viene aggiunta alla fine di questa, con i suoi punti d'interesse. L'originale resta: se non serve più, spostala nel cestino dall'Elenco gite.</p>
+      <h3>Durata stimata</h3>
+      <div class="velocita"><label>Raccolta <input type="number" id="vr" min="1" max="60" step="1"> km/h</label><label>Trasferimento <input type="number" id="vt" min="1" max="90" step="1"> km/h</label></div>
     </details>
 
     <h3 class="solo-editor">Invia al server</h3>
@@ -219,8 +250,10 @@ body:not(.modo-crea) #altre>summary{display:none}
   <div id="map"></div>
   <div id="hint" hidden></div>
   <div id="mtools" hidden>
-    <button data-t="mdraw" title="Disegna il percorso">Disegna</button>
-    <button data-t="mwp" title="Aggiungi un punto d'interesse">Punto d'interesse</button>
+    <div id="cerca"><input id="cercainput" placeholder="Cerca una via o un indirizzo" aria-label="Cerca indirizzo" autocomplete="off"><ul id="cercarisultati" hidden></ul></div>
+    <button data-t="mdraw" title="Disegna il percorso (tasto D)">Disegna</button>
+    <label class="strade" id="stradebox" hidden title="I nuovi tratti seguono le strade (profilo mezzi pesanti)"><input type="checkbox" id="segui" checked> Segui le strade</label>
+    <button data-t="mwp" title="Aggiungi un punto d'interesse (tasto P)">Punto d'interesse</button>
     <span class="sep"></span>
     <button data-t="undo" title="Annulla (Ctrl+Z)">Annulla</button>
     <button data-t="redo" title="Ripeti (Ctrl+Y)">Ripeti</button>
@@ -237,6 +270,9 @@ body:not(.modo-crea) #altre>summary{display:none}
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 <script>
 let ultimaSelezione = null, DATA = [], DATA_VERSION = null, USER = '', HEIGHT = 820, lastMsg = null, booted = false;
 const justSent = new Map(), DK = 'percorsi-bozza-', IK = 'percorsi-chiuse-';
@@ -250,7 +286,7 @@ function hv(a,b){const r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lon-a.lon)*r;const
 function cum(P){const c=[0];for(let i=1;i<P.length;i++)c.push(c[i-1]+hv(P[i-1],P[i]));return c;}
 const fmtKm = m => (m/1000).toLocaleString('it-IT',{minimumFractionDigits:1,maximumFractionDigits:1})+' km';
 const fmtM = m => m<1000 ? Math.round(m)+' m' : fmtKm(m);
-const clone = P => P.map(p=>({lat:p.lat,lon:p.lon,t:p.t}));
+const clone = P => P.map(p=>({lat:p.lat,lon:p.lon,t:p.t,l:p.l||''}));
 const cloneW = W => (W||[]).map(w=>({...w}));
 const wid = () => 'w'+Math.random().toString(36).slice(2,9);
 const conId = W => (W||[]).map(w=>({id:w.id||wid(),lat:w.lat,lon:w.lon,tipo:w.tipo||'nota',testo:w.testo||''}));
@@ -300,7 +336,7 @@ function fromServer(){
   Object.values(groups).forEach(l=>l.remove());for(const k in groups)delete groups[k];
   gite=[];act=null;sel=null;cmpOn=false;wsel=null;
   DATA.forEach((d,i)=>{
-    const pts=d.pts.map(([lat,lon,t])=>({lat,lon,t:t||'r'}));
+    const pts=d.pts.map(([lat,lon,t,l])=>({lat,lon,t:t||'r',l:l||''}));
     const wp=conId(d.wpts);
     const g={id:'s'+d.id,sid:d.id,base:d.version,name:d.name,file:'',color:PAL[i%PAL.length],pts,wp,server:clone(pts),serverWp:cloneW(wp),serverName:d.name,undo:[],redo:[],versions:[],dismissed:{},visible:true,dirty:false};
     try{
@@ -328,17 +364,37 @@ const map=L.map('map',{zoomControl:false,maxZoom:20}).setView([43.81,11.145],14)
 const RP='strict-origin-when-cross-origin';
 const ESRI='https://server.arcgisonline.com/ArcGIS/rest/services/';
 const esri=(svc,o={})=>L.tileLayer(ESRI+svc+'/MapServer/tile/{z}/{y}/{x}',Object.assign({maxZoom:20,maxNativeZoom:19,referrerPolicy:RP,attribution:'&copy; Esri'},o));
+function vettoriale(stile){
+  try{
+    if(!(window.maplibregl&&L.maplibreGL))return null;
+    const c=document.createElement('canvas');if(!(c.getContext('webgl2')||c.getContext('webgl')))return null;
+    return L.maplibreGL({style:'https://tiles.openfreemap.org/styles/'+stile,
+      attribution:'<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> &copy; OpenMapTiles &copy; OpenStreetMap'});
+  }catch(e){return null;}
+}
+const moderne={'Moderna':vettoriale('liberty'),'Chiara':vettoriale('positron'),'Vivace':vettoriale('bright')};
 const base={
+  ...Object.fromEntries(Object.entries(moderne).filter(([,v])=>v)),
   'Stradale':esri('World_Street_Map'),
   'OpenStreetMap':L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:20,maxNativeZoom:19,referrerPolicy:RP,attribution:'&copy; OpenStreetMap'}),
   'Satellite':esri('World_Imagery'),
   'Satellite con vie':L.layerGroup([esri('World_Imagery'),esri('Reference/World_Transportation'),esri('Reference/World_Boundaries_and_Places')])
 };
 const RISERVA='Stradale';
-let sfondo='Satellite con vie';
+let sfondo=base['Moderna']?'Moderna':'Stradale';
 try{let s=localStorage.getItem('percorsi-sfondo');if(s==='Stradale Esri')s='Stradale';if(s&&base[s])sfondo=s;}catch(e){}
 function sorveglia(nome){
-  const lay=base[nome],strati=lay.getLayers?lay.getLayers():[lay];let ok=0,ko=0;
+  const lay=base[nome];
+  if(lay.getMaplibreMap){
+    lay.on('add',()=>{let pronta=false,fatto=false;const gl=lay.getMaplibreMap&&lay.getMaplibreMap();if(!gl)return;
+      const ripiega=()=>{if(fatto||pronta||!map.hasLayer(lay))return;fatto=true;map.removeLayer(lay);base[RISERVA].addTo(map);
+        toast('La mappa "'+nome+'" non si carica: uso "'+RISERVA+'". Puoi cambiarla dal pulsante in alto a destra.');};
+      gl.once('load',()=>{pronta=true;});
+      gl.on('error',()=>setTimeout(ripiega,1500));
+      setTimeout(ripiega,9000);});
+    return;
+  }
+  const strati=lay.getLayers?lay.getLayers():[lay];let ok=0,ko=0;
   const prova=strati[0];
   const onOk=()=>{ok++;};
   const onKo=()=>{ko++;if(ko>=4&&ok===0&&nome!==RISERVA&&map.hasLayer(lay)){
@@ -357,6 +413,29 @@ L.control.scale({imperial:false,position:'bottomright'}).addTo(map);
 const groups={}, vLayer=L.layerGroup().addTo(map), sLayer=L.layerGroup().addTo(map), aLayer=L.layerGroup().addTo(map), cLayer=L.layerGroup().addTo(map), qLayer=L.layerGroup().addTo(map);
 
 const wLayer=L.layerGroup().addTo(map);
+const fLayer=L.layerGroup().addTo(map),latoLayer=L.layerGroup().addTo(map);
+function rottaGradi(a,b){const r=Math.PI/180,y=Math.sin((b.lon-a.lon)*r)*Math.cos(b.lat*r),x=Math.cos(a.lat*r)*Math.sin(b.lat*r)-Math.sin(a.lat*r)*Math.cos(b.lat*r)*Math.cos((b.lon-a.lon)*r);return (Math.atan2(y,x)/r+360)%360;}
+function renderFrecce(){
+  fLayer.clearLayers();latoLayer.clearLayers();
+  if(!act||!act.visible||act.pts.length<2||map.getZoom()<15)return;
+  const P=act.pts,c=cum(P),b=map.getBounds().pad(.2),passo=map.getZoom()>=17?45:map.getZoom()>=16?80:150;
+  const icona=deg=>L.divIcon({className:'freccia',iconSize:[16,16],html:`<svg width="16" height="16" viewBox="0 0 16 16" style="transform:rotate(${deg}deg)"><path d="M8 2 L13 12 L8 9.5 L3 12 Z" fill="${act.color}" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg>`});
+  let prossima=passo/2;
+  for(let i=0;i<P.length-1;i++){
+    const l=c[i+1]-c[i];if(l<=0)continue;
+    while(prossima<=c[i+1]){const f=(prossima-c[i])/l,q=[P[i].lat+(P[i+1].lat-P[i].lat)*f,P[i].lon+(P[i+1].lon-P[i].lon)*f];
+      if(b.contains(q))L.marker(q,{icon:icona(rottaGradi(P[i],P[i+1])),interactive:false,keyboard:false,zIndexOffset:-300}).addTo(fLayer);prossima+=passo;}
+  }
+  /* lato di raccolta: linea tratteggiata spostata di qualche metro dal lato indicato */
+  const sposta=(a,bb,lato)=>{const k=Math.cos(a.lat*Math.PI/180)*111320,dx=(bb.lon-a.lon)*k,dy=(bb.lat-a.lat)*110540,n=Math.hypot(dx,dy)||1,d=7*(lato==='d'?1:-1);
+    const ox=dy/n*d,oy=-dx/n*d;return [[a.lat+oy/110540,a.lon+ox/k],[bb.lat+oy/110540,bb.lon+ox/k]];};
+  for(let i=0;i<P.length-1;i++){
+    const lato=P[i].l;if(!lato||P[i].t==='t')continue;
+    if(!b.contains([P[i].lat,P[i].lon])&&!b.contains([P[i+1].lat,P[i+1].lon]))continue;
+    for(const lt of lato==='e'?['d','s']:[lato])
+      L.polyline(sposta(P[i],P[i+1],lt),{pane:'lines',color:'#E8590C',weight:3,dashArray:'3 5',opacity:.95,interactive:false}).addTo(latoLayer);
+  }
+}
 function renderGita(g){
   let grp=groups[g.id];if(!grp)grp=groups[g.id]=L.layerGroup().addTo(map);
   grp.clearLayers();if(!g.visible)return;
@@ -371,7 +450,7 @@ function renderGita(g){
       L.polyline(ll,{pane:'casing',color:'#fff',weight:10,opacity:.9,interactive:false}).addTo(grp);
       L.polyline(ll,{pane:'lines',color:r.t==='t'?'#46535A':g.color,weight:r.t==='t'?4:5,dashArray:r.t==='t'?'9 7':null,opacity:1}).on('click',onLineClick).addTo(grp);
     } else {
-      L.polyline(ll,{pane:'lines',color:g.color,weight:3,opacity:act?.45:.8,dashArray:r.t==='t'?'6 6':null}).on('click',e=>{L.DomEvent.stop(e);if(modo){clickMappa(e.latlng);return;}activate(g,true);}).addTo(grp);
+      L.polyline(ll,{pane:'lines',color:g.color,weight:3,opacity:act?.45:.8,dashArray:r.t==='t'?'6 6':null}).on('click',e=>{L.DomEvent.stop(e);if(modo){clickMappa(e.latlng,g);return;}activate(g,true);}).addTo(grp);
     }
   }
   if(isA){
@@ -392,7 +471,8 @@ function renderVertices(){
   vLayer.clearLayers();const hint=$('#hint');
   if(!act||!act.visible){hint.hidden=true;return;}
   const msgModo=modo==='disegna'?'Disegno: ogni clic aggiunge un punto'+(sel&&sel.a===sel.b&&sel.a<act.pts.length-1?' dopo quello selezionato':' alla fine')+'. Esc per finire':
-    modo==='punto'?'Clicca dove vuoi mettere il punto o la nota. Esc per annullare':null;
+    modo==='punto'?'Clicca dove vuoi mettere il punto o la nota. Esc per annullare':
+    modo==='copia'?(copia&&copia.src?'Clicca sulla fine del tratto da copiare su "'+copia.src.name+'". Esc per annullare':'Clicca sull\'inizio del tratto da copiare, su un\'altra gita. Esc per annullare'):null;
   if(map.getZoom()<16){hint.hidden=false;hint.textContent=msgModo||'Avvicina la mappa per vedere e modificare i punti';return;}
   hint.hidden=!msgModo;if(msgModo)hint.textContent=msgModo;
   const b=map.getBounds().pad(.15),P=act.pts,inb=P.map(p=>b.contains([p.lat,p.lon]));
@@ -423,7 +503,7 @@ function renderVertices(){
     if(!inb[i]||!inb[i+1]||hv(P[i],P[i+1])<14)continue;
     const mid=[(P[i].lat+P[i+1].lat)/2,(P[i].lon+P[i+1].lon)/2];
     L.marker(mid,{icon:L.divIcon({className:'mid',iconSize:[10,10]}),keyboard:false,zIndexOffset:100,title:'Aggiungi un punto qui'})
-      .on('click',e=>{L.DomEvent.stop(e);pushUndo();P.splice(i+1,0,{lat:mid[0],lon:mid[1],t:P[i].t});sel={a:i+1,b:i+1,anchor:i+1};afterEdit();toast('Punto aggiunto: trascinalo dove serve');})
+      .on('click',e=>{L.DomEvent.stop(e);pushUndo();P.splice(i+1,0,{lat:mid[0],lon:mid[1],t:P[i].t,l:P[i].l||''});sel={a:i+1,b:i+1,anchor:i+1};afterEdit();toast('Punto aggiunto: trascinalo dove serve');})
       .addTo(vLayer);
   }
 }
@@ -507,8 +587,12 @@ function renderList(){
     ul.appendChild(li);
   }
 }
+let VEL={r:8,t:30};
+try{const v=JSON.parse(localStorage.getItem('percorsi-velocita')||'null');if(v&&v.r&&v.t)VEL=v;}catch(e){}
+function durata(L_){const ore=L_.r/1000/VEL.r+L_.t/1000/VEL.t,h=Math.floor(ore),m=Math.round((ore-h)*60);return (h?h+' h ':'')+m+' min';}
 function renderStats(){
   const L_=lengths(act.pts);
+  $('#durata').textContent='Durata stimata: '+durata(L_)+' (raccolta a '+VEL.r+' km/h, trasferimento a '+VEL.t+' km/h)';
   $('#stats').innerHTML=`<div class="st"><b>${fmtKm(L_.tot)}</b><span>totale</span></div><div class="st"><b>${fmtKm(L_.r)}</b><span>raccolta</span></div><div class="st"><b>${fmtKm(L_.t)}</b><span>trasferimento</span></div>`;
   const s=$('#state');s.className=act.dirty?'dirty':'';
   s.textContent=(!act.sid?'Gita nuova, non ancora sul server':act.dirty?'Bozza non inviata, basata sulla versione '+act.base+' del server':'Uguale alla versione '+act.base+' del server')+', '+act.pts.length+' punti';
@@ -525,6 +609,8 @@ function renderSelPanel(){
   bt('del').disabled=none;bt('tr').disabled=none||single;bt('rc').disabled=none||single;
   bt('ts').disabled=none||sel.a===0;bt('te').disabled=none||sel.b>=P.length-1;
   bt('split').disabled=none||!single||sel.a===0||sel.a>=P.length-1;
+  bt('ritorno').disabled=none||single;
+  document.querySelectorAll('.lati [data-l]').forEach(b=>{b.disabled=none||single;});
 }
 function renderAnPanel(){
   const list=visibleAn(),ul=$('#anlist');ul.innerHTML='';
@@ -560,7 +646,7 @@ function renderServer(){
 function renderPanel(){
   $('#empty').hidden=!!act;$('#act').hidden=!act;
   if(!act){$('#mtools').hidden=true;return;}
-  renderStats();renderSelPanel();renderAnPanel();renderServer();renderWpPanel();
+  renderStats();renderSelPanel();renderAnPanel();renderServer();renderWpPanel();riempiUnisci();
 }
 
 /* ---------- punti e note ---------- */
@@ -614,22 +700,106 @@ function renderWpPanel(){
   renderWpList();
 }
 function setModo(m){
-  modo=m;document.body.classList.toggle('disegno',!!m);
+  modo=m;document.body.classList.toggle('disegno',!!m);if(m!=='copia')copia=null;
   if(m==='disegna')map.doubleClickZoom.disable();else map.doubleClickZoom.enable();
   renderVertices();renderWp();renderWpPanel();
 }
-function clickMappa(ll){
+let STRADE=false,inAttesa=null;
+function puntoDisegno(){const P=act.pts;return sel&&sel.a===sel.b&&sel.a<P.length-1?sel.a:P.length-1;}
+function inserisci(nuovi,dopo){
+  const P=act.pts,rif=P[dopo]||{t:'r',l:''};
+  for(const n of nuovi){n.t=rif.t;n.l=rif.l||'';}
+  P.splice(dopo+1,0,...nuovi);const fine=dopo+nuovi.length;sel={a:fine,b:fine,anchor:fine};
+}
+function clickMappa(ll,altra){
   if(!act)return;
+  if(modo==='copia'){
+    if(!altra||altra===act){toast('Clicca su una linea di un\'altra gita');return;}
+    let bi=0,bd=Infinity;altra.pts.forEach((q,i)=>{const d=hv({lat:ll.lat,lon:ll.lng},q);if(d<bd){bd=d;bi=i;}});
+    if(!copia.src||copia.src!==altra){copia.src=altra;copia.a=bi;toast('Ora clicca sulla fine del tratto, sulla stessa gita');renderVertices();return;}
+    const da=Math.min(copia.a,bi),a=Math.max(copia.a,bi);
+    let tratto=altra.pts.slice(da,a+1).map(p=>({lat:p.lat,lon:p.lon,t:p.t,l:p.l||''}));
+    if(bi<copia.a){const inv={d:'s',s:'d',e:'e','':''};tratto=tratto.reverse().map(p=>({...p,l:inv[p.l]}));}
+    if(tratto.length<2){toast('Il tratto è troppo corto: scegli due punti diversi');return;}
+    pushUndo();act.pts.splice(copia.dopo+1,0,...tratto);const fine=copia.dopo+tratto.length;sel={a:fine,b:fine,anchor:fine};
+    copia=null;setModo(null);afterEdit();toast('Copiati '+tratto.length+' punti da "'+altra.name+'"');return;
+  }
+  if(modo==='disegna'&&STRADE&&$('#segui').checked&&act.pts.length){
+    if(inAttesa){toast('Attendi: sto calcolando il tratto precedente');return;}
+    const dopo=puntoDisegno(),da=act.pts[dopo],nonce='s'+Date.now()+Math.random().toString(36).slice(2,6);
+    inAttesa={nonce,dopo,a:{lat:ll.lat,lon:ll.lng},gita:act.id};
+    $('#hint').hidden=false;$('#hint').textContent='Calcolo del tratto lungo le strade…';
+    send({action:'instrada',da:[da.lat,da.lon],a:[ll.lat,ll.lng],nonce});
+    setTimeout(()=>{if(inAttesa&&inAttesa.nonce===nonce){riceviTratto({nonce,errore:'Il servizio delle strade non ha risposto.'});}},20000);
+    return;
+  }
   if(modo==='disegna'){
-    pushUndo();const P=act.pts,p={lat:ll.lat,lon:ll.lng,t:'r'};
-    if(sel&&sel.a===sel.b&&sel.a<P.length-1){p.t=P[sel.a].t;P.splice(sel.a+1,0,p);sel={a:sel.a+1,b:sel.a+1,anchor:sel.a+1};}
-    else{if(P.length)p.t=P[P.length-1].t;P.push(p);sel={a:P.length-1,b:P.length-1,anchor:P.length-1};}
+    pushUndo();const P=act.pts,p={lat:ll.lat,lon:ll.lng,t:'r',l:''};
+    if(sel&&sel.a===sel.b&&sel.a<P.length-1){p.t=P[sel.a].t;p.l=P[sel.a].l||'';P.splice(sel.a+1,0,p);sel={a:sel.a+1,b:sel.a+1,anchor:sel.a+1};}
+    else{if(P.length){p.t=P[P.length-1].t;p.l=P[P.length-1].l||'';}P.push(p);sel={a:P.length-1,b:P.length-1,anchor:P.length-1};}
     afterEdit();return;
   }
   if(modo==='punto'){
     pushUndo();const w={id:wid(),lat:ll.lat,lon:ll.lng,tipo:'nota',testo:''};act.wp.push(w);wsel=w.id;
     setModo(null);afterEdit();setTimeout(()=>$('#wptesto').focus(),60);
   }
+}
+let cercaTimer=null,cercaMarker=null;
+async function cercaIndirizzo(q){
+  const c=map.getCenter(),ul=$('#cercarisultati');
+  let ris=[];
+  try{
+    const r=await fetch('https://photon.komoot.io/api/?limit=6&q='+encodeURIComponent(q)+'&lat='+c.lat.toFixed(4)+'&lon='+c.lng.toFixed(4));
+    const j=await r.json();
+    ris=(j.features||[]).map(f=>{const p=f.properties||{};return {lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0],
+      t:[p.name||p.street,p.housenumber].filter(Boolean).join(' '),d:[p.street&&p.name!==p.street?p.street:'',p.city||p.county,p.state].filter(Boolean).join(', ')};});
+  }catch(e){
+    try{const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=it&q='+encodeURIComponent(q));
+      ris=(await r.json()).map(x=>({lat:+x.lat,lon:+x.lon,t:x.display_name.split(',')[0],d:x.display_name.split(',').slice(1,4).join(',')}));}catch(e2){}
+  }
+  ul.innerHTML='';
+  if(!ris.length){ul.innerHTML='<li><small>Nessun risultato</small></li>';ul.hidden=false;return;}
+  for(const x of ris){const li=document.createElement('li');li.innerHTML='<span></span><small></small>';
+    li.querySelector('span').textContent=x.t||'Senza nome';li.querySelector('small').textContent=x.d;
+    li.onclick=()=>{ul.hidden=true;map.setView([x.lat,x.lon],18,{animate:!RM});
+      if(cercaMarker)map.removeLayer(cercaMarker);
+      cercaMarker=L.circleMarker([x.lat,x.lon],{radius:10,color:'#7A5CC2',weight:3,fillOpacity:.15,interactive:false}).addTo(map);
+      setTimeout(()=>{if(cercaMarker){map.removeLayer(cercaMarker);cercaMarker=null;}},6000);};
+    ul.appendChild(li);}
+  ul.hidden=false;
+}
+$('#cercainput').addEventListener('input',e=>{clearTimeout(cercaTimer);const q=e.target.value.trim();if(q.length<3){$('#cercarisultati').hidden=true;return;}cercaTimer=setTimeout(()=>cercaIndirizzo(q),350);});
+$('#cercainput').addEventListener('keydown',e=>{if(e.key==='Escape'){$('#cercarisultati').hidden=true;e.target.blur();}if(e.key==='Enter'){const li=$('#cercarisultati li');if(li)li.click();}});
+document.addEventListener('click',e=>{if(!e.target.closest('#cerca'))$('#cercarisultati').hidden=true;});
+
+/* unione e velocità */
+function riempiUnisci(){
+  const sel_=$('#unisci');if(!sel_||!act)return;
+  sel_.innerHTML='<option value="">Scegli la gita…</option>'+gite.filter(g=>g!==act).map(g=>`<option value="${g.id}"></option>`).join('');
+  [...sel_.options].slice(1).forEach(o=>{o.textContent=gite.find(g=>g.id===o.value).name;});
+}
+$('#unisciok').onclick=()=>{
+  const g=gite.find(x=>x.id===$('#unisci').value);if(!g){toast('Scegli prima la gita da unire');return;}
+  pushUndo();act.pts.push(...clone(g.pts));act.wp.push(...conId(cloneW(g.wp).map(w=>({...w,id:null}))));
+  afterEdit();fitAct();toast('Aggiunta in coda "'+g.name+'". L\'originale resta: spostala nel cestino dall\'Elenco gite se non serve più.');
+};
+$('#vr').value=VEL.r;$('#vt').value=VEL.t;
+for(const id of ['vr','vt'])$('#'+id).oninput=()=>{const r=+$('#vr').value,t=+$('#vt').value;if(r>0&&t>0){VEL={r,t};try{localStorage.setItem('percorsi-velocita',JSON.stringify(VEL));}catch(e){}if(act)renderStats();}};
+
+function riceviTratto(r){
+  if(!inAttesa||r.nonce!==inAttesa.nonce)return;
+  const att=inAttesa;inAttesa=null;renderVertices();
+  const g=gite.find(x=>x.id===att.gita);if(!g)return;
+  if(act!==g)activate(g,false);
+  pushUndo();
+  if(r.punti&&r.punti.length>1){
+    const nuovi=r.punti.slice(1).map(([lat,lon])=>({lat,lon}));
+    inserisci(nuovi,att.dopo);
+  }else{
+    inserisci([{lat:att.a.lat,lon:att.a.lon}],att.dopo);
+    toast((r.errore||'Strada non trovata.')+' Ho aggiunto un tratto dritto.');
+  }
+  afterEdit();
 }
 $('#wptipo').innerHTML=Object.entries(TIPI_WP).map(([k,v])=>`<option value="${k}">${v.l}</option>`).join('');
 const wpSel=()=>act&&act.wp.find(w=>w.id===wsel);
@@ -653,12 +823,30 @@ function pushUndo(){act.undo.push(snap(act));if(act.undo.length>200)act.undo.shi
 function afterEdit(){
   act.dirty=true;
   if(sel){sel.a=Math.min(sel.a,act.pts.length-1);sel.b=Math.min(sel.b,act.pts.length-1);}
-  renderGita(act);renderVertices();renderSel();renderAnom();renderWp();renderPanel();renderList();renderSeq();save();
+  renderGita(act);renderVertices();renderSel();renderAnom();renderWp();renderFrecce();renderPanel();renderList();renderSeq();save();
 }
 function undo(){if(!act||!act.undo.length)return;act.redo.push(snap(act));ripristinaSnap(act.undo.pop());sel=null;afterEdit();toast('Modifica annullata');}
 function redo(){if(!act||!act.redo.length)return;act.undo.push(snap(act));ripristinaSnap(act.redo.pop());sel=null;afterEdit();}
 
 const ACTIONS={
+  ritorno(){
+    if(sel.a===sel.b){toast('Seleziona il tratto da ripercorrere: clic sul primo punto, Maiusc+clic sull\'ultimo');return;}
+    pushUndo();const P=act.pts,inv={d:'s',s:'d',e:'e','':''},A=sel.a,B=sel.b;
+    /* il tipo di un segmento sta nel suo punto iniziale: il ritorno ripercorre i segmenti B-1..A al contrario */
+    const dopo={t:P[B].t,l:P[B].l||''};
+    P[B].t=P[B-1].t;P[B].l=inv[P[B-1].l||''];
+    const nuovi=[];
+    for(let j=B-1;j>=A;j--){
+      const seg=j>A?P[j-1]:null;
+      nuovi.push({lat:P[j].lat,lon:P[j].lon,t:seg?seg.t:dopo.t,l:seg?inv[seg.l||'']:dopo.l});
+    }
+    P.splice(B+1,0,...nuovi);
+    const fine=B+nuovi.length;sel={a:fine,b:fine,anchor:fine};afterEdit();toast('Aggiunto il ritorno: '+nuovi.length+' punti');
+  },
+  copia(){
+    copia={src:null,a:null,dopo:sel&&sel.a===sel.b?sel.a:act.pts.length-1};setModo('copia');
+    toast('Clicca sull\'inizio del tratto da copiare, su un\'altra gita');
+  },
   del(){const n=sel.b-sel.a+1;if(act.sid&&act.pts.length-n<2){toast('Una gita deve avere almeno due punti');return;}pushUndo();act.pts.splice(sel.a,n);sel=null;afterEdit();toast(n===1?'Punto eliminato':n+' punti eliminati');},
   tr(){setType('t');}, rc(){setType('r');},
   ts(){pushUndo();const n=sel.a;act.pts.splice(0,n);sel=null;afterEdit();toast('Rimossi '+n+' punti iniziali');},
@@ -669,12 +857,21 @@ const ACTIONS={
     gite.splice(gite.indexOf(act)+1,0,g);sel=null;renderGita(g);afterEdit();toast('Gita divisa: la seconda parte è in elenco');
   }
 };
+function setLato(l){
+  if(!sel||sel.a===sel.b){toast('Seleziona un tratto: clic sul primo punto, Maiusc+clic sull\'ultimo');return;}
+  pushUndo();for(let i=sel.a;i<sel.b;i++)act.pts[i].l=l;afterEdit();
+  toast(l?'Raccolta lato '+{d:'destro',s:'sinistro',e:'entrambi i lati'}[l]:'Lato di raccolta tolto');
+}
+document.querySelectorAll('.lati [data-l]').forEach(b=>b.onclick=()=>setLato(b.dataset.l));
+let copia=null;
 function setType(t){pushUndo();for(let i=sel.a;i<sel.b;i++)act.pts[i].t=t;afterEdit();toast(t==='t'?'Tratto segnato come trasferimento':'Tratto segnato come raccolta');}
-document.querySelectorAll('#selbox [data-a]').forEach(b=>b.onclick=()=>{if(sel)ACTIONS[b.dataset.a]();});
+document.querySelectorAll('#selbox [data-a]').forEach(b=>b.onclick=()=>{if(b.dataset.a==='copia'){ACTIONS.copia();return;}if(sel)ACTIONS[b.dataset.a]();});
 
 $('#undo').onclick=undo;$('#redo').onclick=redo;
 $('#fit').onclick=()=>fitAct();
-$('#rev').onclick=()=>{pushUndo();const P=act.pts,n=P.length,ty=P.map(p=>p.t);P.reverse();for(let j=0;j<n-1;j++)P[j].t=ty[n-2-j];P[n-1].t='r';sel=null;afterEdit();toast('Senso di marcia invertito');};
+$('#rev').onclick=()=>{pushUndo();const P=act.pts,n=P.length,ty=P.map(p=>p.t),la=P.map(p=>p.l||'');P.reverse();
+  const inv={d:'s',s:'d',e:'e','':''};for(let j=0;j<n-1;j++){P[j].t=ty[n-2-j];P[j].l=inv[la[n-2-j]];}P[n-1].t='r';P[n-1].l='';
+  sel=null;afterEdit();toast('Senso di marcia invertito (anche i lati di raccolta)');};
 $('#name').oninput=e=>{act.name=e.target.value;act.dirty=act.name!==act.serverName||act.dirty;renderStats();renderServer();renderList();save();};
 function send(payload){window.parent.postMessage({isStreamlitMessage:true,type:'streamlit:setComponentValue',value:payload,dataType:'json'},'*');}
 function invia(stato){
@@ -689,7 +886,7 @@ function invia(stato){
   for(const b of ['#salvab','#conclude'])$(b).disabled=true;
   $('#vnote').value='';
   send({action:act.sid?'save':'create',stato,solo_stato:soloStato,gita_id:act.sid||null,base:act.base||null,name:act.name,note,local_id:act.id,
-    pts:act.pts.map(p=>[+p.lat.toFixed(6),+p.lon.toFixed(6),p.t]),
+    pts:act.pts.map(p=>[+p.lat.toFixed(6),+p.lon.toFixed(6),p.t,p.l||'']),
     wpts:act.wp.map(w=>({lat:+w.lat.toFixed(6),lon:+w.lon.toFixed(6),tipo:w.tipo,testo:w.testo})),nonce});
 }
 $('#send').onclick=()=>invia(null);
@@ -731,10 +928,10 @@ function activate(g,fit){
 }
 function fitAct(){if(!act||!act.pts.length)return;if(act.pts.length===1){map.setView([act.pts[0].lat,act.pts[0].lon],17);return;}map.fitBounds(L.latLngBounds(act.pts.map(p=>[p.lat,p.lon])),{padding:[40,40],animate:!RM});}
 function fitAll(){const all=gite.flatMap(g=>g.pts.map(p=>[p.lat,p.lon]));if(all.length)map.fitBounds(L.latLngBounds(all),{padding:[30,30]});}
-function renderAll(skipLines){if(!skipLines)gite.forEach(renderGita);renderVertices();renderSel();renderAnom();renderWp();renderCmp();renderPanel();renderList();renderSeq();}
+function renderAll(skipLines){if(!skipLines)gite.forEach(renderGita);renderVertices();renderSel();renderAnom();renderWp();renderFrecce();renderCmp();renderPanel();renderList();renderSeq();}
 let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600);}
 
-map.on('moveend zoomend',()=>{renderVertices();renderWp();});
+map.on('moveend zoomend',()=>{renderVertices();renderWp();renderFrecce();});
 map.on('click',e=>{
   if(modo){clickMappa(e.latlng);return;}
   if(wsel){wsel=null;renderWp();renderWpPanel();}
@@ -744,6 +941,11 @@ document.addEventListener('keydown',e=>{
   if(e.target.matches('input,textarea'))return;
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();}
   else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redo();}
+  else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();if(act)(MODE==='crea'?$('#salvab'):$('#send')).click();}
+  else if(e.ctrlKey||e.metaKey||e.altKey){return;}
+  else if(e.key.toLowerCase()==='d'&&act){$('#mdraw').click();}
+  else if(e.key.toLowerCase()==='p'&&act){$('#mwp').click();}
+  else if(e.key.toLowerCase()==='f'&&act){fitAct();}
   else if(e.key==='Escape'&&modo){setModo(null);}
   else if((e.key==='Delete'||e.key==='Backspace')&&wsel&&act){e.preventDefault();$('#wpdel').click();}
   else if((e.key==='Delete'||e.key==='Backspace')&&sel&&act){e.preventDefault();ACTIONS.del();}
@@ -775,6 +977,8 @@ window.addEventListener('message',e=>{
     if(m.local_id&&m.ok){const g=gite.find(x=>x.id===m.local_id&&!x.sid);if(g){const eraAttiva=act===g;groups[g.id]?.remove();delete groups[g.id];gite.splice(gite.indexOf(g),1);if(eraAttiva)act=null;renderAll();save();
       const nuova=m.gita_id&&gite.find(x=>x.sid===m.gita_id);if(nuova)activate(nuova,false);}}
   }
+  STRADE=!!a.strade;$('#stradebox').hidden=!STRADE;
+  if(a.instradamento)riceviTratto(a.instradamento);
   const sl=a.seleziona;
   if(sl&&sl.n!==ultimaSelezione){const g=gite.find(x=>x.sid===sl.id);if(g){ultimaSelezione=sl.n;activate(g,true);}}
   $('#send').textContent='Invia';if(act)renderServer();

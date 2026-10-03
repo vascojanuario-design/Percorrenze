@@ -54,6 +54,35 @@ Nella scheda **Nuove gite** si sceglie il cantiere e si apre l'**area di progett
 
 I progetti in corso sono gite con stato "bozza": stanno sul server, li vedono i colleghi del cantiere, ma non compaiono nell'editor delle gite, nello storico né agli operatori. Concludendo, la gita passa tra quelle del cantiere e gli operatori la vedono subito.
 
+## Strumenti dell'editor
+
+- **Mappe**: Moderna, Chiara e Vivace (vettoriali OpenFreeMap, dati OpenStreetMap aggiornati settimanalmente), Stradale, OpenStreetMap, Satellite, Satellite con vie. Se una mappa non si carica, l'editor passa da solo alla Stradale.
+- **Cerca una via o un indirizzo** sopra la mappa.
+- **Frecce del senso di marcia** lungo la gita (avvicinando la mappa).
+- **Lato di raccolta** per tratto (destro, sinistro, entrambi): si seleziona il tratto e si sceglie il lato; sulla mappa appare una linea arancione tratteggiata dal lato indicato e la navigazione lo annuncia all'operatore.
+- **Aggiungi il ritorno**: ripercorre al contrario il tratto selezionato (vicoli ciechi).
+- **Copia da un'altra gita**: si clicca l'inizio e la fine di un tratto su un'altra gita e lo si inserisce dopo il punto selezionato.
+- **Unisci un'altra gita**: la aggiunge in coda, con i suoi punti d'interesse.
+- **Durata stimata** con velocità di raccolta e trasferimento regolabili.
+- **Segui le strade** (se configurato): in modalità disegno ogni nuovo tratto segue le strade, profilo mezzi pesanti.
+- Scorciatoie: D disegna, P punto d'interesse, F inquadra, Ctrl+S salva, Ctrl+Z / Ctrl+Y annulla e ripeti.
+
+### Aggancio alle strade (OpenRouteService)
+
+1. Registrarsi gratis su openrouteservice.org e creare una chiave (API key).
+2. Aggiungere nei Secrets dell'app:
+
+   ```toml
+   [openrouteservice]
+   chiave = "..."
+   ```
+
+Il piano gratuito ha un limite giornaliero di richieste: ogni clic in modalità "Segui le strade" è una richiesta.
+
+## Gite da Excel o CSV
+
+Da **Elenco gite → Carica GPX o Excel** si possono caricare file `.xlsx`, `.xls` o `.csv` con una riga per punto, nell'ordine di percorrenza. Colonne riconosciute: **latitudine** e **longitudine** (obbligatorie; vanno bene anche `lat`/`lon` o `X`/`Y` come negli export Movendo), **gita** (una gita per ogni nome diverso), **ordine**, **tipo** (raccolta / trasferimento), **lato** (destro / sinistro / entrambi), **nota** (diventa un punto d'interesse). Un file con soli indirizzi, senza coordinate, per ora non si importa.
+
 ## Punti d'interesse e note
 
 Nell'editor, sezione **Percorso e punti d'interesse**:

@@ -28,7 +28,9 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
-Punto = list  # [lat, lon, tipo] con tipo "r" (raccolta) o "t" (trasferimento)
+Punto = list  # [lat, lon, tipo, lato]: tipo "r" (raccolta) o "t" (trasferimento); lato "" , "d", "s", "e" (destro, sinistro, entrambi)
+LATI = {"d": "destro", "s": "sinistro", "e": "entrambi"}
+LATI_INV = {v: k for k, v in LATI.items()}
 
 
 class Conflitto(Exception):
@@ -58,15 +60,17 @@ def leggi_gpx(contenuto: bytes, nome_file: str = "") -> tuple[str, list[Punto]]:
 
     punti: list[Punto] = []
     for seg in (el for el in radice.iter() if _locale(el.tag) == "trkseg"):
-        tipo = "r"
+        tipo, lato = "r", ""
         for el in seg.iter():
             if _locale(el.tag) == "tipo" and (el.text or "").strip() == "trasferimento":
                 tipo = "t"
+            if _locale(el.tag) == "lato":
+                lato = LATI_INV.get((el.text or "").strip(), "")
         for p in (el for el in seg if _locale(el.tag) == "trkpt"):
-            punti.append([float(p.get("lat")), float(p.get("lon")), tipo])
+            punti.append([float(p.get("lat")), float(p.get("lon")), tipo, lato])
     if not punti:
         for p in (el for el in radice.iter() if _locale(el.tag) == "rtept"):
-            punti.append([float(p.get("lat")), float(p.get("lon")), "r"])
+            punti.append([float(p.get("lat")), float(p.get("lon")), "r", ""])
     if len(punti) < 2:
         raise ValueError(f"{nome_file}: il file non contiene una traccia")
 
@@ -130,11 +134,13 @@ def pulisci(punti: list[Punto]) -> tuple[list[Punto], int]:
     out: list[Punto] = []
     rimossi = 0
     for p in punti:
+        tipo = p[2] if len(p) > 2 and p[2] in ("r", "t") else "r"
+        lato = p[3] if len(p) > 3 and p[3] in LATI else ""
         if out and distanza(out[-1], p) < 0.5:
-            out[-1][2] = p[2]
+            out[-1][2], out[-1][3] = tipo, lato
             rimossi += 1
             continue
-        out.append([round(p[0], 6), round(p[1], 6), p[2] if p[2] in ("r", "t") else "r"])
+        out.append([round(float(p[0]), 6), round(float(p[1]), 6), tipo, lato])
     return out, rimossi
 
 
@@ -164,10 +170,13 @@ def scrivi_gpx(nome: str, punti: list[Punto], descrizione: str = "", waypoint: l
                      f'<desc>{escape(w["testo"])}</desc><type>{w["tipo"]}</type></wpt>')
     righe.append(f"  <trk><name>{escape(nome)}</name>")
     inizio = 0
+    chiave = lambda p: (p[2], p[3] if len(p) > 3 else "")
     for i in range(1, len(punti)):
-        if i == len(punti) - 1 or punti[i][2] != punti[inizio][2]:
+        if i == len(punti) - 1 or chiave(punti[i]) != chiave(punti[inizio]):
             tipo = "trasferimento" if punti[inizio][2] == "t" else "raccolta"
-            righe.append(f"    <trkseg><extensions><p:tipo>{tipo}</p:tipo></extensions>")
+            lato = LATI.get(chiave(punti[inizio])[1])
+            righe.append(f"    <trkseg><extensions><p:tipo>{tipo}</p:tipo>"
+                         + (f"<p:lato>{lato}</p:lato>" if lato else "") + "</extensions>")
             for p in punti[inizio:i + 1]:
                 righe.append(f'      <trkpt lat="{p[0]:.6f}" lon="{p[1]:.6f}"/>')
             righe.append("    </trkseg>")

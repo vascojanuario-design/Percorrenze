@@ -100,13 +100,16 @@ button:disabled{opacity:.45}
   </div>
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.0.22/leaflet-maplibre-gl.js"></script>
 <script>
 /* Guida lungo la gita, tutta sul telefono: la posizione non viene inviata a nessuno. */
 const $=s=>document.querySelector(s);
 const TIPI={cassonetto:{l:'Cassonetti / raccolta',s:'C',c:'#2F6B4F'},utenza:{l:'Utenza critica',s:'U',c:'#1F5FA8'},
   attenzione:{l:'Attenzione',s:'!',c:'#C92A2A'},accesso:{l:'Accesso',s:'A',c:'#7A4FA0'},nota:{l:'Nota',s:'N',c:'#5F6B73'}};
 let G=null,P=[],C=[],TOT=0,fatto=null,pos=0,ultimaPos=null,watch=null,sim=null,segui=true,voceOn=true,avviata=false;
-let simulata=false,fuoriN=0,saltoN=0,saltoPos=null,ultimaFrase='',viste=new Set(),wake=null,chiave='';
+let ultimoTratto=null,simulata=false,fuoriN=0,saltoN=0,saltoPos=null,ultimaFrase='',viste=new Set(),wake=null,chiave='';
 const hv=(a,b)=>{const r=Math.PI/180,dl=(b.lat-a.lat)*r,dn=(b.lon-a.lon)*r;const x=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dn/2)**2;return 2*6371000*Math.asin(Math.sqrt(x));};
 const fmtKm=m=>(m/1000).toLocaleString('it-IT',{minimumFractionDigits:1,maximumFractionDigits:1})+' km';
 const fmtM=m=>m<1000?Math.round(m/10)*10+' m':fmtKm(m);
@@ -116,8 +119,19 @@ const rotta=(a,b)=>{const r=Math.PI/180,y=Math.sin((b.lon-a.lon)*r)*Math.cos(b.l
 const map=L.map('map',{zoomControl:false,maxZoom:20,attributionControl:true}).setView([43.81,11.14],15);
 const RP='strict-origin-when-cross-origin',E='https://server.arcgisonline.com/ArcGIS/rest/services/';
 const esri=s=>L.tileLayer(E+s+'/MapServer/tile/{z}/{y}/{x}',{maxZoom:20,maxNativeZoom:19,referrerPolicy:RP,attribution:'&copy; Esri'});
-const sfondi={'Stradale':esri('World_Street_Map'),'Satellite con vie':L.layerGroup([esri('World_Imagery'),esri('Reference/World_Transportation'),esri('Reference/World_Boundaries_and_Places')])};
-sfondi['Stradale'].addTo(map);L.control.layers(sfondi,null,{position:'topright'}).addTo(map);
+function vettoriale(stile){
+  try{if(!(window.maplibregl&&L.maplibreGL))return null;const c=document.createElement('canvas');if(!(c.getContext('webgl2')||c.getContext('webgl')))return null;
+    return L.maplibreGL({style:'https://tiles.openfreemap.org/styles/'+stile,attribution:'OpenFreeMap &copy; OpenMapTiles &copy; OpenStreetMap'});}catch(e){return null;}
+}
+const moderna=vettoriale('liberty');
+const sfondi={...(moderna?{'Moderna':moderna}:{}),'Stradale':esri('World_Street_Map'),'Satellite con vie':L.layerGroup([esri('World_Imagery'),esri('Reference/World_Transportation'),esri('Reference/World_Boundaries_and_Places')])};
+let iniziale=moderna?'Moderna':'Stradale';
+try{const s=localStorage.getItem('guida-sfondo');if(s&&sfondi[s])iniziale=s;}catch(e){}
+sfondi[iniziale].addTo(map);L.control.layers(sfondi,null,{position:'topright'}).addTo(map);
+map.on('baselayerchange',e=>{try{localStorage.setItem('guida-sfondo',e.name);}catch(_){}});
+if(moderna)moderna.on('add',()=>{const gl=moderna.getMaplibreMap&&moderna.getMaplibreMap();if(!gl)return;let pronta=false,fatto=false;
+  const ripiega=()=>{if(fatto||pronta||!map.hasLayer(moderna))return;fatto=true;map.removeLayer(moderna);sfondi['Stradale'].addTo(map);};
+  gl.once('load',()=>{pronta=true;});gl.on('error',()=>setTimeout(ripiega,1500));setTimeout(ripiega,9000);});
 map.createPane('base').style.zIndex=410;map.createPane('fatti').style.zIndex=420;map.createPane('avanti').style.zIndex=430;
 const lBase=L.layerGroup().addTo(map),lFatti=L.layerGroup().addTo(map),lAvanti=L.layerGroup().addTo(map),lWp=L.layerGroup().addTo(map),lMancanti=L.layerGroup().addTo(map);
 let marcatore=null;
@@ -219,7 +233,17 @@ function istruzione(){
     let d=rotta(P[k],P[p2])-rotta(P[p0],P[k]);d=((d+540)%360)-180;
     if(Math.abs(d)>=35){svolta={k,d,dist:C[k]-pos};break;}
   }
-  const tipo=P[a.i]&&P[a.i].t==='t';$('#tipo').hidden=!tipo;
+  const seg=P[a.i]||{},tipo=seg.t==='t',lato=!tipo&&seg.l;
+  $('#tipo').hidden=!(tipo||lato);
+  $('#tipo').textContent=tipo?'Trasferimento':lato?{d:'Lato destro',s:'Lato sinistro',e:'Entrambi i lati'}[lato]:'';
+  const statoTratto=(tipo?'t':'r')+(lato||'');
+  if(avviata&&statoTratto!==ultimoTratto){
+    if(ultimoTratto!==null){
+      if(tipo)parla('Trasferimento');
+      else parla(lato?'Raccolta '+{d:'lato destro',s:'lato sinistro',e:'su entrambi i lati'}[lato]:'Inizio raccolta');
+    }
+    ultimoTratto=statoTratto;
+  }
   let t1,t2,ang=0;
   if(pos>=TOT-15){t1='Arrivo';t2='Fine della gita';}
   else if(!svolta){t1='Prosegui dritto';t2='per '+fmtM(Math.min(350,TOT-pos));}
@@ -300,7 +324,7 @@ window.addEventListener('message',e=>{
   const d=e.data;if(!d||d.type!=='streamlit:render')return;
   misura();setH(altezza);
   const g=(d.args||{}).gita;if(!g||(G&&G.id===g.id&&G.version===g.version))return;
-  G={...g};P=g.pts.map(([lat,lon,t])=>({lat,lon,t:t||'r'}));C=[0];for(let i=1;i<P.length;i++)C.push(C[i-1]+hv(P[i-1],P[i]));TOT=C[C.length-1];
+  G={...g};P=g.pts.map(([lat,lon,t,l])=>({lat,lon,t:t||'r',l:l||''}));C=[0];for(let i=1;i<P.length;i++)C.push(C[i-1]+hv(P[i-1],P[i]));TOT=C[C.length-1];
   G.wp=(g.wpts||[]).map((w,i)=>{let bi=0,bd=Infinity;P.forEach((p,k)=>{const dd=hv(w,p);if(dd<bd){bd=dd;bi=k;}});return {...w,id:'w'+i,at:C[bi]};}).sort((a,b)=>a.at-b.at);
   fatto=new Uint8Array(Math.max(0,P.length-1));pos=0;
   chiave='guida-'+g.id+'-v'+g.version+'-'+new Date().toISOString().slice(0,10);

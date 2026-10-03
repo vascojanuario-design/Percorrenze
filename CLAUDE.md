@@ -52,6 +52,11 @@ Dockerfile, docker-compose.yml, requirements.txt, README.md
 - Navigazione con `st.navigation` e pagine-funzione (dizionario `PAGINE`): Home (`pagina_home`), Gite (Elenco gite `pagina_elenco`, Editor `pagina_editor`, Nuove gite `scheda_nuove_gite`, Percorrenze), Organizzazione (Cantieri e mezzi `scheda_flotta`, Utenti, Impostazioni). Operatori: una sola pagina, menu nascosto. Guida e area di progettazione restano a tutto schermo tramite `st.session_state` (`guida`, `pagina == "crea"`). Per cambiare pagina dal codice: `vai_a("chiave", **stato)`.
 - Il cantiere si sceglie solo nella barra laterale (`cantiere_sel`); il filtro mezzo è nell'intestazione dell'Editor. `nel_filtro(m, mezzo)`.
 - Elenco gite: tabella con anteprime SVG (`svg_dati`, colonna immagine), selezione singola → `scheda_gita()` (Modifica, Rinomina con `Archivio.rinomina`, Naviga, GPX, Cestino/Ripristina, Elimina definitivamente, versioni e attività); selezione multipla → `azioni_multiple()`.
+- Punti: `[lat, lon, tipo, lato]`, lato "" | "d" | "s" | "e" (stesso schema del tipo: vale per il segmento che parte dal punto). GPX: `<p:lato>destro|sinistro|entrambi</p:lato>` nelle estensioni del trkseg; i trkseg si dividono per (tipo, lato). Invertendo il senso, destro e sinistro si scambiano.
+- Editor: frecce del senso di marcia (`renderFrecce`, livello `fLayer`), linee del lato (`latoLayer`), azioni `ritorno`, `copia` (modo 'copia'), unione (`#unisci`), durata stimata (`VEL` in localStorage), ricerca indirizzo (Photon, ripiego Nominatim), scorciatoie D/P/F/Ctrl+S.
+- Aggancio alle strade: `strade.instrada()` con OpenRouteService `driving-hgv`, chiave in secrets `[openrouteservice] chiave`; l'editor invia `{action:'instrada', da, a, nonce}`, `gestisci()` risponde in `st.session_state.instr` passato come argomento `instradamento`.
+- Mappe moderne: OpenFreeMap (stili liberty, positron, bright) con maplibre-gl 4.7.1 e maplibre-gl-leaflet 0.0.22; se WebGL o lo stile non sono disponibili si passa alla Stradale Esri (anche nella guida).
+- Import da Excel/CSV: `strade.leggi_tabella()` (pandas + openpyxl).
 - Selezione di una gita nell'editor da fuori: argomento `seleziona = {id, n}` (n cambia a ogni richiesta), in `st.session_state.editor_seleziona` o `crea_seleziona`.
 - Avvisi (`avvisi_sistema`): archivio non su GitHub, token in scadenza (`DepositoGitHub.scadenza_token` dall'intestazione `github-authentication-token-expiration`).
 - "Nuove gite" apre l'area di progettazione in una nuova finestra con `./?area=crea&c=<cantiere>&t=<gettone>`: gettone monouso valido 10 minuti in `gettoni()` (cache_resource), scambiato all'avvio con la sessione e tolto dall'indirizzo.
@@ -113,7 +118,9 @@ Telefoni degli operatori: Samsung e Redmi (Android), personali o assegnati alla 
 
 Sfondi da valutare: Google satellite con vie tramite la Map Tiles API ufficiale (chiave nei Secrets, sessione creata lato server, attribuzione Google; 100.000 riquadri al mese gratuiti) oppure le ortofoto della Regione Toscana (gratuite, da verificare). Mai usare indirizzi non ufficiali delle immagini di Google.
 
-Più avanti: aggancio automatico alle strade (Valhalla, profilo camion), punti di raccolta lungo il percorso, collegamento con il modulo di gestione esistente, database PostGIS.
+Da valutare: **ottimizzatore di percorsi** (problema del postino rurale sulla rete stradale OSM: dato l'insieme di strade da servire, ordine che minimizza ripassi e trasferimenti, con sensi unici e restrizioni dei mezzi); import da Excel con **elenco di vie** (geocodifica + instradamento).
+
+Più avanti: aggancio automatico alle strade su server proprio (Valhalla, profilo camion), punti di raccolta lungo il percorso, collegamento con il modulo di gestione esistente, database PostGIS.
 
 **Attenzione legale:** finché l'app guida soltanto, senza registrare né inviare la posizione, non c'è controllo a distanza. Prima di registrare o trasmettere posizioni degli operatori servono l'accordo sindacale o l'autorizzazione dell'Ispettorato (art. 4 Statuto dei Lavoratori) e la valutazione d'impatto GDPR (DPIA). Non implementare tracciamento senza conferma esplicita dell'utente su questo punto.
 
