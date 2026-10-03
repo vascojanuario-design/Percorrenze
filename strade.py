@@ -13,7 +13,11 @@ import pandas as pd
 
 import os
 
-ORS_URL = os.environ.get("PERCORSI_ORS_URL", "https://api.openrouteservice.org/v2/directions/{profilo}/geojson")
+# Il servizio è passato su api.heigit.org; il vecchio indirizzo resta come riserva.
+ORS_URLS = [os.environ["PERCORSI_ORS_URL"]] if os.environ.get("PERCORSI_ORS_URL") else [
+    "https://api.heigit.org/openrouteservice/v2/directions/{profilo}/geojson",
+    "https://api.openrouteservice.org/v2/directions/{profilo}/geojson",
+]
 
 
 class ErroreStrade(Exception):
@@ -27,11 +31,19 @@ def instrada(chiave: str, da: list[float], a: list[float], profilo: str = "drivi
     if not chiave:
         raise ErroreStrade("Aggancio alle strade non configurato: manca la chiave di OpenRouteService")
     corpo = {"coordinates": [[da[1], da[0]], [a[1], a[0]]], "radiuses": [80, 80], "instructions": False}
-    try:
-        r = requests.post(ORS_URL.format(profilo=profilo), json=corpo, timeout=20,
-                          headers={"Authorization": chiave, "Content-Type": "application/json"})
-    except Exception as e:  # rete non raggiungibile
-        raise ErroreStrade(f"Servizio delle strade non raggiungibile ({e})") from None
+    r, ultimo_errore = None, None
+    for url in ORS_URLS:
+        try:
+            r = requests.post(url.format(profilo=profilo), json=corpo, timeout=20,
+                              headers={"Authorization": chiave, "Content-Type": "application/json"})
+        except Exception as e:  # rete non raggiungibile: si prova l'indirizzo successivo
+            ultimo_errore, r = e, None
+            continue
+        if r.status_code in (404, 502, 503) and "routable" not in r.text and url != ORS_URLS[-1]:
+            continue
+        break
+    if r is None:
+        raise ErroreStrade(f"Servizio delle strade non raggiungibile ({ultimo_errore})")
     if r.status_code == 404 or (r.status_code == 400 and "routable" in r.text):
         raise ErroreStrade("Nessuna strada trovata vicino a uno dei due punti")
     if r.status_code == 403:
