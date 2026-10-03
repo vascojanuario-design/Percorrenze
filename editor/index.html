@@ -87,7 +87,8 @@ button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-d
 .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:16px}
 .help{font-size:13px;color:var(--ink2);margin:0}
 .help kbd{font:500 12px var(--f);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:#fff}
-#hint{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:800;background:var(--ink);color:#fff;font-size:14px;padding:6px 14px;border-radius:20px;pointer-events:none}
+#hint{position:absolute;bottom:150px;left:50%;transform:translateX(-50%);z-index:800;background:var(--ink);color:#fff;font-size:14px;padding:6px 14px;border-radius:20px;pointer-events:none;max-width:calc(100% - 40px);text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+body.modo-crea #hint{bottom:70px}
 #hint[hidden],#seqbar[hidden]{display:none}
 #toast{position:absolute;bottom:96px;left:50%;transform:translateX(-50%);z-index:900;background:var(--ink);color:#fff;padding:8px 16px;border-radius:6px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
 #toast.on{opacity:1}
@@ -108,7 +109,7 @@ button.link{border:none;background:none;padding:2px 4px;color:var(--ink2);text-d
 .leaflet-container{font-family:var(--f)}
 .freccia{pointer-events:none}
 .freccia svg{display:block}
-#cerca{position:relative;flex:1 1 220px;min-width:180px;max-width:320px}
+#cerca{position:relative;flex:0 1 210px;min-width:150px}
 #cerca input{width:100%;font:500 14px var(--f);padding:8px 12px;border:1px solid var(--line);border-radius:6px;box-shadow:0 1px 6px rgba(28,42,46,.22)}
 #cercarisultati{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:6px;margin-top:4px;list-style:none;padding:4px 0;z-index:900;box-shadow:0 4px 14px rgba(0,0,0,.18);max-height:260px;overflow:auto}
 #cercarisultati li{padding:7px 10px;font-size:14px;cursor:pointer}
@@ -131,8 +132,12 @@ body:not(.modo-crea) #altre>summary{display:none}
 #altre>summary{cursor:pointer;font:600 15px var(--fc);padding:6px 0;color:var(--ink2)}
 .passo{display:flex;align-items:center;gap:8px;font:600 15px var(--fc);margin:16px 0 8px}
 .passo i{font-style:normal;display:inline-flex;width:22px;height:22px;border-radius:50%;background:var(--brand);color:#fff;align-items:center;justify-content:center;font-size:13px}
-#mtools{position:absolute;top:12px;left:12px;z-index:800;display:flex;gap:6px;flex-wrap:wrap;max-width:calc(100% - 80px)}
-#mtools button{box-shadow:0 1px 6px rgba(28,42,46,.22);padding:8px 12px;font-weight:600}
+#mtools{position:absolute;top:12px;left:12px;right:64px;z-index:800;display:flex;gap:6px;flex-wrap:wrap;align-items:center;pointer-events:none}
+#mtools>*{pointer-events:auto}
+#mtools button{box-shadow:0 1px 6px rgba(28,42,46,.22);padding:7px 10px;font-weight:600}
+#mtools button.icona{padding:6px 8px;line-height:0}
+#mtools button.icona svg{width:18px;height:18px}
+#mtools .gruppo{display:flex;gap:4px}
 #mtools button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
 #mtools .sep{width:6px}
 #salvastato{display:flex;align-items:center;gap:8px;font-size:14px;margin:6px 0 10px;padding:8px 10px;border-radius:8px;background:var(--brand3);color:var(--brand2)}
@@ -254,10 +259,11 @@ body:not(.modo-crea) #altre>summary{display:none}
     <button data-t="mdraw" title="Disegna il percorso (tasto D)">Disegna</button>
     <label class="strade" id="stradebox" hidden title="I nuovi tratti seguono le strade (profilo mezzi pesanti)"><input type="checkbox" id="segui" checked> Segui le strade</label>
     <button data-t="mwp" title="Aggiungi un punto d'interesse (tasto P)">Punto d'interesse</button>
-    <span class="sep"></span>
-    <button data-t="undo" title="Annulla (Ctrl+Z)">Annulla</button>
-    <button data-t="redo" title="Ripeti (Ctrl+Y)">Ripeti</button>
-    <button data-t="fit" title="Inquadra la gita">Inquadra</button>
+    <span class="gruppo">
+      <button data-t="undo" class="icona" title="Annulla (Ctrl+Z)" aria-label="Annulla"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button data-t="redo" class="icona" title="Ripeti (Ctrl+Y)" aria-label="Ripeti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+      <button data-t="fit" class="icona" title="Inquadra la gita (tasto F)" aria-label="Inquadra la gita"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    </span>
   </div>
   <div id="seqbar" hidden>
     <button id="play" aria-label="Riproduci">Segui</button>
@@ -808,12 +814,12 @@ $('#wptesto').onfocus=()=>{if(wpSel())pushUndo();};
 $('#wptesto').oninput=e=>{const w=wpSel();if(!w)return;w.testo=e.target.value;act.dirty=true;renderWp();renderStats();renderServer();renderList();renderWpList();save();};
 $('#wpclose').onclick=()=>{wsel=null;renderWp();renderWpPanel();};
 $('#wpdel').onclick=()=>{const w=wpSel();if(!w)return;pushUndo();act.wp=act.wp.filter(x=>x!==w);wsel=null;afterEdit();toast('Punto eliminato');};
-$('#mdraw').onclick=()=>{setModo(modo==='disegna'?null:'disegna');if(modo)toast('Clicca sulla mappa per aggiungere punti. Esc per finire.');};
+$('#mdraw').onclick=()=>{setModo(modo==='disegna'?null:'disegna');};
 $('#mwp').onclick=()=>setModo(modo==='punto'?null:'punto');
 $('#newg').onclick=()=>{
   const g=mkLocal('Nuova gita',[]);g.dirty=true;g.color=PAL[gite.length%PAL.length];gite.push(g);
   activate(g,false);setModo('disegna');save();
-  $('#name').focus();$('#name').select();toast('Scrivi il nome, poi clicca sulla mappa per disegnare il percorso.');
+  $('#name').focus();$('#name').select();
 };
 
 /* ---------- modifiche ---------- */
