@@ -81,7 +81,7 @@ Il piano gratuito ha un limite giornaliero di richieste: ogni clic in modalità 
 
 ## Gite da Excel o CSV
 
-Da **Elenco gite → Carica GPX o Excel** si possono caricare file `.xlsx`, `.xls` o `.csv` con una riga per punto, nell'ordine di percorrenza. Colonne riconosciute: **latitudine** e **longitudine** (obbligatorie; vanno bene anche `lat`/`lon` o `X`/`Y` come negli export Movendo), **gita** (una gita per ogni nome diverso), **ordine**, **tipo** (raccolta / trasferimento), **lato** (destro / sinistro / entrambi), **nota** (diventa un punto d'interesse). Un file con soli indirizzi, senza coordinate, per ora non si importa.
+Da **Elenco gite → Carica GPX o Excel** si possono caricare file `.xlsx`, `.xls` o `.csv` con una riga per punto, nell'ordine di percorrenza. Colonne riconosciute: **latitudine** e **longitudine** (obbligatorie; vanno bene anche `lat`/`lon` o `X`/`Y` come negli export Movendo), **gita** (una gita per ogni nome diverso), **ordine**, **tipo** (raccolta / trasferimento), **lato** (destro / sinistro / entrambi), **nota** (diventa un punto d'interesse). **Elenco di vie senza coordinate**: se il file ha una colonna **Via** (ed eventualmente Comune e CAP, con un titolo nelle righe sopra l'intestazione), il portale cerca ogni via sulla mappa (Photon, poi Nominatim, nel comune indicato e vicino alla via precedente), le collega nell'ordine lungo le strade con OpenRouteService e crea un **progetto in corso** nel cantiere scelto, con un punto d'interesse col nome di ogni via. Il risultato è una bozza da rifinire nell'area di progettazione: l'elenco dice quali vie e in che ordine, non da che lato si entra, se una via si fa tutta o a metà, né i ripassi.
 
 ## Punti d'interesse e note
 

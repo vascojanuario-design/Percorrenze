@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import re
+import unicodedata
 
 import pandas as pd
 
@@ -140,3 +141,133 @@ def leggi_tabella(contenuto: bytes, nome_file: str) -> list[dict]:
     if not gite:
         raise ValueError(f"{nome_file}: nessuna gita con almeno due punti validi")
     return gite
+
+
+# ---------------------------------------------------------------- elenco di vie (senza coordinate)
+
+GEO_URL = os.environ.get("PERCORSI_GEOCODER_URL", "https://photon.komoot.io/api/")
+NOMINATIM_URL = os.environ.get("PERCORSI_NOMINATIM_URL", "https://nominatim.openstreetmap.org/search")
+UA = {"User-Agent": "PortalePercorsi-Cristoforo/1.0 (gestione percorsi di raccolta)"}
+
+
+def _norm(t) -> str:
+    t = unicodedata.normalize("NFKD", str(t or "")).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", " ", t).strip()
+
+
+def leggi_elenco_vie(contenuto: bytes, nome_file: str) -> dict | None:
+    """Se il file è un elenco di vie senza coordinate restituisce {nome, vie: [{via, comune, cap}]}, altrimenti None."""
+    try:
+        if nome_file.lower().endswith((".xlsx", ".xlsm", ".xls")):
+            grezzo = pd.read_excel(io.BytesIO(contenuto), header=None, dtype=str)
+        else:
+            testo = contenuto.decode("utf-8-sig", errors="replace")
+            sep = ";" if testo.count(";") > testo.count(",") else ","
+            grezzo = pd.read_csv(io.StringIO(testo), header=None, sep=sep, dtype=str)
+    except Exception:
+        return None
+    riga_int = None
+    for i in range(min(len(grezzo), 15)):
+        celle = [_norm(c) for c in grezzo.iloc[i].tolist()]
+        if any(c in ("via", "indirizzo", "strada", "nome via") for c in celle):
+            riga_int = i
+            break
+    if riga_int is None:
+        return None
+    intest = [_norm(c) for c in grezzo.iloc[riga_int].tolist()]
+    if any(c in ("lat", "latitudine", "latitude", "y", "ycoord", "lon", "lng", "longitudine", "longitude", "x", "xcoord")
+           for c in intest):
+        return None
+    def col(*nomi):
+        for n in nomi:
+            if n in intest:
+                return intest.index(n)
+        return None
+    c_via = col("via", "indirizzo", "strada", "nome via")
+    c_com, c_cap = col("comune", "citta", "localita"), col("cap")
+    titolo = ""
+    for i in range(riga_int):
+        valori = [str(v).strip() for v in grezzo.iloc[i].tolist() if not pd.isna(v) and str(v).strip()]
+        if valori:
+            titolo = valori[0]
+    vie = []
+    for i in range(riga_int + 1, len(grezzo)):
+        r = grezzo.iloc[i].tolist()
+        via = r[c_via] if c_via is not None and c_via < len(r) else None
+        if via is None or pd.isna(via) or not str(via).strip():
+            continue
+        via = str(via).replace("\u2019", "'").replace("\u2018", "'").strip()
+        comune = str(r[c_com]).strip() if c_com is not None and not pd.isna(r[c_com]) else ""
+        cap = str(r[c_cap]).strip().split(".")[0] if c_cap is not None and not pd.isna(r[c_cap]) else ""
+        vie.append({"via": via, "comune": comune, "cap": cap})
+    if not vie:
+        return None
+    return {"nome": titolo or re.sub(r"\.[^.]+$", "", nome_file), "vie": vie}
+
+
+def geocodifica_via(via: str, comune: str, cap: str = "", vicino: list[float] | None = None) -> list[float] | None:
+    """Posizione [lat, lon] della via nel comune indicato (Photon, poi Nominatim). None se non trovata."""
+    import requests
+
+    via_n, com_n = _norm(via), _norm(comune)
+    parametri = {"q": f"{via}, {comune}".strip(", "), "limit": 8}
+    if vicino:
+        parametri.update(lat=round(vicino[0], 5), lon=round(vicino[1], 5))
+    try:
+        r = requests.get(GEO_URL, params=parametri, headers=UA, timeout=15)
+        candidati = []
+        for f in r.json().get("features", []):
+            pr = f.get("properties", {})
+            luogo = _norm(" ".join(str(pr.get(k, "")) for k in ("city", "county", "district", "locality", "state")))
+            nome = _norm(pr.get("name") or pr.get("street") or "")
+            punti = (2 if com_n and com_n in luogo else 0) + (2 if nome and (nome in via_n or via_n in nome) else 0) \
+                + (1 if pr.get("osm_key") == "highway" else 0)
+            lon, lat = f["geometry"]["coordinates"][:2]
+            candidati.append((punti, lat, lon))
+        candidati = [c for c in candidati if c[0] >= 3]
+        if candidati:
+            _, lat, lon = max(candidati, key=lambda c: c[0])
+            return [round(lat, 6), round(lon, 6)]
+    except Exception:
+        pass
+    try:
+        q = {"format": "json", "limit": 1, "street": via, "city": comune, "country": "Italia"}
+        if cap:
+            q["postalcode"] = cap
+        r = requests.get(NOMINATIM_URL, params=q, headers=UA, timeout=15)
+        dati = r.json()
+        if dati:
+            return [round(float(dati[0]["lat"]), 6), round(float(dati[0]["lon"]), 6)]
+    except Exception:
+        pass
+    return None
+
+
+def costruisci_da_vie(elenco: dict, chiave_ors: str, avanzamento=None) -> tuple[list, list, list]:
+    """Trova le vie e le collega nell'ordine lungo le strade. Restituisce (punti, waypoint, vie_non_trovate)."""
+    import time
+
+    trovate, non_trovate = [], []
+    vicino = None
+    for k, v in enumerate(elenco["vie"], 1):
+        if avanzamento:
+            avanzamento(k, len(elenco["vie"]), v["via"])
+        pos = geocodifica_via(v["via"], v["comune"], v["cap"], vicino)
+        if pos:
+            trovate.append((v["via"], pos))
+            vicino = pos
+        else:
+            non_trovate.append(v["via"])
+        time.sleep(0.3)
+    punti: list = []
+    waypoint = [{"lat": p[0], "lon": p[1], "tipo": "nota", "testo": f"{n} (n. {i} dell'elenco)"}
+                for i, (n, p) in enumerate(trovate, 1)]
+    for i in range(len(trovate) - 1):
+        da, a = trovate[i][1], trovate[i + 1][1]
+        try:
+            tratto = instrada(chiave_ors, da, a) if chiave_ors else [da, a]
+        except ErroreStrade:
+            tratto = [da, a]
+        tratto = [[p[0], p[1], "r", ""] for p in tratto]
+        punti.extend(tratto if not punti else tratto[1:])
+    return punti, waypoint, non_trovate

@@ -633,12 +633,16 @@ def carica_gpx(dest_cantiere: str | None, chiave_ui: str) -> None:
     chiave_upload = f"upload_{chiave_ui}_{st.session_state.get('upload_n', 0)}"
     nuovi = st.file_uploader("File GPX, Excel o CSV", type=["gpx", "xlsx", "xls", "csv"], accept_multiple_files=True,
                              key=chiave_upload, label_visibility="collapsed")
-    st.caption("Da Excel o CSV servono le colonne di **latitudine** e **longitudine**, nell'ordine di percorrenza. "
-               "Facoltative: gita (una gita per ogni nome), ordine, tipo (raccolta/trasferimento), lato "
-               "(destro/sinistro/entrambi), nota.")
+    st.caption("Da Excel o CSV: o le colonne **latitudine** e **longitudine** nell'ordine di percorrenza (facoltative: "
+               "gita, ordine, tipo, lato, nota), oppure un **elenco di vie** con la colonna Via (e Comune): "
+               "il portale le trova sulla mappa, le collega lungo le strade e crea un progetto in corso da rifinire.")
     if nuovi and st.button("Importa", type="primary", width="stretch", key=f"importa_{chiave_ui}"):
         for f in nuovi:
             try:
+                elenco = None if f.name.lower().endswith(".gpx") else strade.leggi_elenco_vie(f.getvalue(), f.name)
+                if elenco:
+                    importa_elenco_vie(elenco, f.name, dest_cantiere)
+                    continue
                 if f.name.lower().endswith(".gpx"):
                     nome, pts = leggi_gpx(f.getvalue(), f.name)
                     gite_file = [{"nome": nome, "punti": pts, "waypoint": leggi_waypoint(f.getvalue())}]
@@ -654,6 +658,32 @@ def carica_gpx(dest_cantiere: str | None, chiave_ui: str) -> None:
                 avviso(str(e), ok=False)
         st.session_state.upload_n = st.session_state.get("upload_n", 0) + 1
         st.rerun()
+
+
+def importa_elenco_vie(elenco: dict, nome_file: str, dest_cantiere: str | None) -> None:
+    """Excel con l'elenco delle vie: le trova sulla mappa, le collega lungo le strade e crea un progetto in corso."""
+    if not dest_cantiere:
+        avviso(f"{nome_file}: per un elenco di vie scegli prima un cantiere nella barra laterale", ok=False)
+        return
+    with st.status(f"Costruisco \"{elenco['nome']}\" da {len(elenco['vie'])} vie…", expanded=True) as stato:
+        riga = st.empty()
+        punti, wpts, mancanti = strade.costruisci_da_vie(
+            elenco, CHIAVE_STRADE, lambda k, n, via: riga.write(f"Cerco sulla mappa {k} di {n}: {via}"))
+        if len(punti) < 2:
+            stato.update(label="Vie non trovate", state="error")
+            avviso(f"{nome_file}: non sono riuscito a trovare abbastanza vie sulla mappa", ok=False)
+            return
+        punti, _ = pulisci(punti)
+        archivio.crea(elenco["nome"], punti, utente, f"Creata dall'elenco di vie {nome_file}", cantiere=dest_cantiere,
+                      waypoint=wpts, stato="bozza")
+        stato.update(label="Fatto", state="complete")
+    testo = (f"Creato il progetto \"{elenco['nome']}\" da {len(elenco['vie']) - len(mancanti)} vie: lo trovi in "
+             "Nuove gite, da rifinire nell'area di progettazione")
+    if mancanti:
+        testo += f". Non trovate: {', '.join(mancanti)}"
+    if not CHIAVE_STRADE:
+        testo += ". Senza la chiave di OpenRouteService le vie sono collegate in linea retta"
+    avviso(testo, ok=not mancanti)
 
 
 def vai_a(pagina: str, **stato) -> None:
